@@ -1,7 +1,9 @@
 #pragma once 
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 #include <vector>
+#include <array>
 #include <string>
 #include <optional>
 
@@ -25,6 +27,35 @@ struct AllocatedBuffer
     VkBuffer buffer = VK_NULL_HANDLE;
     VkDeviceMemory memory = VK_NULL_HANDLE;
     VkDeviceSize size = 0;
+};
+
+struct Vertex 
+{
+    glm::vec3 pos;
+    glm::vec3 color;
+
+    static VkVertexInputBindingDescription getBindingDescription()
+    {
+        VkVertexInputBindingDescription bindingDescription{};
+        bindingDescription.binding = 0;
+        bindingDescription.stride = sizeof(Vertex);
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+        return bindingDescription;
+    }
+
+    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions()
+    {
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+        attributeDescriptions[0].binding = 0;
+        attributeDescriptions[0].location = 0;
+        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[0].offset = offsetof(Vertex, pos);
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[1].offset = offsetof(Vertex, color);
+        return attributeDescriptions;
+    }
 };
 
 // Number of frame the CPU is allowed to record ahead of the GPU.
@@ -94,7 +125,12 @@ private:
     // COMMANDS 
     VkCommandPool M_COMMANDPOOL = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> M_COMMANDBUFFERS;
-    
+
+    // GEOMETRY
+    AllocatedBuffer M_VERTEXBUFFER{};
+    AllocatedBuffer M_INDEXBUFFER{};
+    uint32_t M_INDEXCOUNT = 0;
+
     // SYNC
     std::vector<VkSemaphore> M_IMAGEAVAILABLESEMAPHORES;
     std::vector<VkSemaphore> M_RENDERFINISHEDSEMAPHORES;
@@ -117,7 +153,9 @@ private:
 
     // PIPELINE 
     void createPipelineLayout();
-    void createGraphicsPipeline(); 
+    void createGraphicsPipeline();
+    void createVertexBuffer();
+    void createIndexBuffer();
 
     // COMMANDS AND SYNC 
     void createCommandPool();   // done

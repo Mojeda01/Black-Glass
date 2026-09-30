@@ -100,6 +100,10 @@ void AlethiaV3::cleanup()
     
     cleanupSwapchain();
     std::cout << "  [cleanup] Swapchain resources destroyed. \n";
+    
+    destroyBuffer(M_VERTEXBUFFER);
+    destroyBuffer(M_INDEXBUFFER);
+    std::cout << "  [cleanup] Geometry buffers destroyed. \n";
 
     for (size_t i = 0; i < M_INFLIGHTFENCES.size(); i++)
     { 

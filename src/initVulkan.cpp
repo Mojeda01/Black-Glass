@@ -32,6 +32,12 @@ void AlethiaV3::initVulkan()
     std::cout << "→ createCommandPool()\n";
     createCommandPool();
 
+    std::cout << "→ createVertexBuffer()\n";
+    createVertexBuffer();
+
+    std::cout << "→ createIndexBuffer()\n";
+    createIndexBuffer();
+
     std::cout << "→ createCommandBuffers()\n";
     createCommandBuffers();
 

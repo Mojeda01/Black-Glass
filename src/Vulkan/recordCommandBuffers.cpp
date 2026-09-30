@@ -92,7 +92,11 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
     scissor.extent = M_SWAPCHAINEXTENT;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    vkCmdDraw(commandBuffer, 3, 1, 0,0 );
+    VkBuffer vertexBuffers[] = { M_VERTEXBUFFER.buffer };
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(commandBuffer, M_INDEXBUFFER.buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(commandBuffer, M_INDEXCOUNT, 1, 0, 0, 0);
 
     vkCmdEndRendering(commandBuffer);
 
