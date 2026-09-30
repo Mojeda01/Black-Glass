@@ -31,7 +31,7 @@ void AlethiaV3::drawFrame()
 
     if(result == VK_ERROR_OUT_OF_DATE_KHR)
     {
-        // Swapchain recreation not implemented yet; nothing to do this frame.
+        recreateSwapchain();
         return;
     } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
     {
@@ -76,7 +76,12 @@ void AlethiaV3::drawFrame()
 
     result = vkQueuePresentKHR(M_PRESENTQUEUE, &presentInfo);
 
-    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR && result != VK_ERROR_OUT_OF_DATE_KHR)
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_framebufferResized)
+    {
+        m_framebufferResized = false;
+        recreateSwapchain();
+    }
+    else if (result != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to present swapchain image!");
     }
@@ -92,25 +97,16 @@ void AlethiaV3::cleanup()
     {
         vkDeviceWaitIdle(M_DEVICE);
     }
-
-    for (auto ImageView : M_SWAPCHAINIMAGEVIEWS)
-    {
-        vkDestroyImageView(M_DEVICE, ImageView, nullptr);
-    }
-    if (!M_SWAPCHAINIMAGEVIEWS.empty())
-    {
-        std::cout << "  [cleanup] " << M_SWAPCHAINIMAGEVIEWS.size() << " image views destroyed. \n";
-    }
+    
+    cleanupSwapchain();
+    std::cout << "  [cleanup] Swapchain resources destroyed. \n";
 
     for (size_t i = 0; i < M_INFLIGHTFENCES.size(); i++)
     { 
         vkDestroySemaphore(M_DEVICE, M_IMAGEAVAILABLESEMAPHORES[i], nullptr);
         vkDestroyFence(M_DEVICE, M_INFLIGHTFENCES[i], nullptr);
-    }
-    for (size_t i = 0; i < M_RENDERFINISHEDSEMAPHORES.size(); i++)
-    {
-        vkDestroySemaphore(M_DEVICE, M_RENDERFINISHEDSEMAPHORES[i], nullptr);
-    }
+    } 
+    
     if (!M_INFLIGHTFENCES.empty())
     {
         std::cout << "  [cleanup] Sync Objects destroyed. \n";
@@ -132,13 +128,7 @@ void AlethiaV3::cleanup()
     {
         vkDestroyCommandPool(M_DEVICE, M_COMMANDPOOL, nullptr);
         std::cout << "  [cleanup] Command pool destroyed. \n";
-    }
-
-    if (M_SWAPCHAIN != VK_NULL_HANDLE)
-    {
-        vkDestroySwapchainKHR(M_DEVICE, M_SWAPCHAIN, nullptr);
-        std::cout << "  [cleanup] Swapchain destroyed. \n";
-    }
+    } 
     
     if (M_DEVICE != VK_NULL_HANDLE)
     {

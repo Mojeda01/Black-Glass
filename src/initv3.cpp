@@ -31,6 +31,7 @@ V3Window::V3Window(int width, int height, const char* title)
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
     m_window = glfwCreateWindow(width, height, title, nullptr, nullptr);
     if (!m_window) {
@@ -62,6 +63,13 @@ void initv3() {
 
         AlethiaV3 renderer(window.get());
         renderer.initVulkan();
+
+        glfwSetWindowUserPointer(window.get(), &renderer);
+        glfwSetFramebufferSizeCallback(window.get(),
+            [](GLFWwindow* w, int, int) {
+                auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
+                if (r) r->setFramebufferResized();
+            });
 
         while (!window.shouldClose()) {
             window.pollEvents();

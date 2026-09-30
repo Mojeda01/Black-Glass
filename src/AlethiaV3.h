@@ -58,8 +58,11 @@ public:
     void drawFrame();
     void initVulkan();
     bool isInitialized() const { return M_INITIALIZED; }
+
+    void setFramebufferResized() { m_framebufferResized = true; }
 private:
     GLFWwindow* m_window = nullptr;
+    bool m_framebufferResized = false;
 
     // CORE
     VkInstance M_INSTANCE = VK_NULL_HANDLE;
@@ -77,13 +80,11 @@ private:
     VkFormat M_SWAPCHAINIMAGEFORMAT{};
     VkExtent2D M_SWAPCHAINEXTENT{};
 
-    // PIPELINE
-    VkRenderPass M_RENDERPASS = VK_NULL_HANDLE;
+    // PIPELINE 
     VkPipelineLayout M_PIPELINELAYOUT = VK_NULL_HANDLE;
     VkPipeline M_GRAPHICSPIPELINE = VK_NULL_HANDLE;
 
-    // COMMANDS
-    std::vector<VkFramebuffer> M_FRAMEBUFFERS;
+    // COMMANDS 
     VkCommandPool M_COMMANDPOOL = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> M_COMMANDBUFFERS;
     
