@@ -40,6 +40,7 @@ add_library(alethia_v3 STATIC
     Vulkan/createSwapchain.cpp
     Vulkan/createImageViews.cpp
     Vulkan/recreateSwapchain.cpp
+    Vulkan/memory.cpp
     Vulkan/createCommandPool.cpp 
     Vulkan/createCommandBuffers.cpp
     Vulkan/createSyncObjects.cpp

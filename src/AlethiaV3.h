@@ -20,6 +20,13 @@ struct SwapchainSupportDetails{
     std::vector<VkPresentModeKHR> presentModes;
 };
 
+struct AllocatedBuffer 
+{
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    VkDeviceSize size = 0;
+};
+
 // Number of frame the CPU is allowed to record ahead of the GPU.
 constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -121,6 +128,16 @@ private:
     // QUERY HELPERS
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
     SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device);
+
+    // MEMORY
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+    AllocatedBuffer createBuffer(   VkDeviceSize size,
+                                    VkBufferUsageFlags usage,
+                                    VkMemoryPropertyFlags properties);
+    void destroyBuffer(AllocatedBuffer& buffer);
+    void copyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
+    VkCommandBuffer beginSingleTimeCommands();
+    void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 
     // SHADER
     VkShaderModule createShaderModule(const std::vector<char>& code);
