@@ -28,6 +28,9 @@ void AlethiaV3::initVulkan()
 
     std::cout << "→ createImageViews()\n";
     createImageViews();
+    
+    std::cout << "→ createDepthResources()\n";
+    createDepthResources();
 
     std::cout << "→ createCommandPool()\n";
     createCommandPool();

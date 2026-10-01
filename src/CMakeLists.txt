@@ -48,6 +48,7 @@ add_library(alethia_v3 STATIC
     Vulkan/createGraphicsPipeline.cpp
     Vulkan/recordCommandBuffers.cpp
     Vulkan/createGeometry.cpp
+    Vulkan/createDepthResources.cpp
     initVulkan.cpp
 )
 

@@ -29,6 +29,14 @@ struct AllocatedBuffer
     VkDeviceSize size = 0;
 };
 
+struct AllocatedImage
+{
+    VkImage image = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    VkImageView view = VK_NULL_HANDLE;
+    VkFormat format = VK_FORMAT_UNDEFINED;
+};
+
 struct Vertex 
 {
     glm::vec3 pos;
@@ -118,6 +126,9 @@ private:
     VkFormat M_SWAPCHAINIMAGEFORMAT{};
     VkExtent2D M_SWAPCHAINEXTENT{};
 
+    // DEPTH
+    AllocatedImage M_DEPTHIMAGE{};
+
     // PIPELINE 
     VkPipelineLayout M_PIPELINELAYOUT = VK_NULL_HANDLE;
     VkPipeline M_GRAPHICSPIPELINE = VK_NULL_HANDLE;
@@ -150,6 +161,7 @@ private:
     void createImageViews();    // done 
     void recreateSwapchain();
     void cleanupSwapchain();
+    void createDepthResources();
 
     // PIPELINE 
     void createPipelineLayout();
@@ -169,6 +181,12 @@ private:
 
     // MEMORY
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+    VkFormat findDepthFormat();
+    AllocatedImage createImage( uint32_t width, uint32_t height, VkFormat format,
+                                VkImageTiling tiling, VkImageUsageFlags usage,
+                                VkMemoryPropertyFlags properties,
+                                VkImageAspectFlags aspectFlags);
+    void destroyImage(AllocatedImage& image);
     AllocatedBuffer createBuffer(   VkDeviceSize size,
                                     VkBufferUsageFlags usage,
                                     VkMemoryPropertyFlags properties);
