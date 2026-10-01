@@ -8,15 +8,25 @@ namespace
 {
 // same triangle as the hardcoded,  now as real data.
 const std::vector<Vertex> VERTICES = {
-    {{-0.5f, -0.5f, 0.3f}, {1.0f, 0.0f, 0.0f}},
-    {{ 0.3f, -0.5f, 0.3f}, {1.0f, 0.0f, 0.0f}},
-    {{-0.1f,  0.4f, 0.3f}, {1.0f, 0.0f, 0.0f}},
-
-    {{-0.3f, -0.3f, 0.7f}, {0.0f, 0.4f, 1.0f}},
-    {{ 0.5f, -0.3f, 0.7f}, {0.0f, 0.4f, 1.0f}},
-    {{ 0.1f,  0.6f, 0.7f}, {0.0f, 0.4f, 1.0f}}
+    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}},
+    {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}},
+    {{ 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 1.0f}},
+    {{ 0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
+    {{-0.5f,  0.5f,  0.5f}, {0.2f, 0.2f, 0.2f}}
 };
-const std::vector<uint32_t> INDICES = { 0, 1, 2, 3, 4, 5 };
+
+const std::vector<uint32_t> INDICES = {
+    0, 1, 2,  2, 3, 0,   // back
+    4, 5, 6,  6, 7, 4,   // front
+    0, 4, 7,  7, 3, 0,   // left
+    1, 5, 6,  6, 2, 1,   // right
+    3, 2, 6,  6, 7, 3,   // top
+    0, 1, 5,  5, 4, 0    // bottom
+};
+
 } // namespace
 
 void AlethiaV3::createVertexBuffer()

@@ -49,6 +49,7 @@ add_library(alethia_v3 STATIC
     Vulkan/recordCommandBuffers.cpp
     Vulkan/createGeometry.cpp
     Vulkan/createDepthResources.cpp
+    Vulkan/createDescriptors.cpp
     initVulkan.cpp
 )
 
@@ -75,6 +76,11 @@ endif()
 
 target_compile_definitions(alethia_v3 PRIVATE
     ALETHIA_V3_SHADER_DIR="${V3_SHADER_BIN_DIR}"
+)
+
+target_compile_definitions(alethia_v3 PUBLIC
+    GLM_FORCE_DEPTH_ZERO_TO_ONE
+    GLM_FORCE_RADIANS
 )
 
 add_dependencies(alethia_v3 AlethiaV3Shaders)

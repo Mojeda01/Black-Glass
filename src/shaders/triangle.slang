@@ -1,14 +1,19 @@
+struct UBO {
+    float4x4 model;
+    float4x4 view;
+    float4x4 proj;
+};
 
+[[vk::binding(0, 0)]]
+ConstantBuffer<UBO> ubo;
 
-struct VSInput 
-{
-    float3 pos : POSITION;
+struct VSInput {
+    float3 pos   : POSITION;
     float3 color : COLOR;
 };
 
-struct VSOutput
-{
-    float4 pos : SV_Position;
+struct VSOutput {
+    float4 pos   : SV_Position;
     float3 color : COLOR;
 };
 
@@ -16,7 +21,8 @@ struct VSOutput
 VSOutput vertexMain(VSInput input)
 {
     VSOutput output;
-    output.pos = float4(input.pos, 1.0);
+    float4 world = mul(ubo.model, float4(input.pos, 1.0));
+    output.pos = mul(ubo.proj, mul(ubo.view, world));
     output.color = input.color;
     return output;
 }

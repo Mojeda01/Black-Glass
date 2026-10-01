@@ -66,6 +66,13 @@ struct Vertex
     }
 };
 
+struct UniformBufferObject 
+{
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
+};
+
 // Number of frame the CPU is allowed to record ahead of the GPU.
 constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -141,6 +148,12 @@ private:
     AllocatedBuffer M_VERTEXBUFFER{};
     AllocatedBuffer M_INDEXBUFFER{};
     uint32_t M_INDEXCOUNT = 0;
+    
+    // UNIFORMS
+    std::vector<AllocatedBuffer> M_UNIFORMBUFFERS;
+    std::vector<void*> M_UNIFORMBUFFERSMAPPED;
+    VkDescriptorSetLayout M_DESCRIPTORSETLAYOUT = VK_NULL_HANDLE;
+    PFN_vkCmdPushDescriptorSetKHR M_PUSHDESCRIPTORFN = nullptr;
 
     // SYNC
     std::vector<VkSemaphore> M_IMAGEAVAILABLESEMAPHORES;
@@ -168,6 +181,9 @@ private:
     void createGraphicsPipeline();
     void createVertexBuffer();
     void createIndexBuffer();
+    void createDescriptorSetLayout();
+    void createUniformBuffers();
+    void updateUniformBuffer(uint32_t currentImage);
 
     // COMMANDS AND SYNC 
     void createCommandPool();   // done

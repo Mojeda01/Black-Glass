@@ -114,6 +114,22 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
     VkDeviceSize offsets[] = { 0 };
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(commandBuffer, M_INDEXBUFFER.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+    VkDescriptorBufferInfo bufferInfo{};
+    bufferInfo.buffer = M_UNIFORMBUFFERS[M_CURRENTFRAME].buffer;
+    bufferInfo.offset = 0;
+    bufferInfo.range = sizeof(UniformBufferObject);
+
+    VkWriteDescriptorSet descriptorWrite{};
+    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstBinding = 0;
+    descriptorWrite.descriptorCount = 1;
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptorWrite.pBufferInfo = &bufferInfo;
+
+    M_PUSHDESCRIPTORFN(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                        M_PIPELINELAYOUT, 0, 1, &descriptorWrite);
+
     vkCmdDrawIndexed(commandBuffer, M_INDEXCOUNT, 1, 0, 0, 0);
 
     vkCmdEndRendering(commandBuffer);

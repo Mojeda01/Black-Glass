@@ -41,6 +41,12 @@ void AlethiaV3::initVulkan()
     std::cout << "→ createIndexBuffer()\n";
     createIndexBuffer();
 
+    std::cout << "→ createDescriptorSetLayout()\n";
+    createDescriptorSetLayout();
+
+    std::cout << "→ createUniformBuffers()\n";
+    createUniformBuffers();
+
     std::cout << "→ createCommandBuffers()\n";
     createCommandBuffers();
 

@@ -43,6 +43,7 @@ void AlethiaV3::drawFrame()
     vkResetFences(M_DEVICE, 1, &M_INFLIGHTFENCES[M_CURRENTFRAME]);
 
     vkResetCommandBuffer(M_COMMANDBUFFERS[M_CURRENTFRAME], 0);
+    updateUniformBuffer(M_CURRENTFRAME);
     recordCommandBuffers(M_COMMANDBUFFERS[M_CURRENTFRAME], imageIndex);
 
     VkSemaphore waitSemaphores[] = { M_IMAGEAVAILABLESEMAPHORES[M_CURRENTFRAME] };
@@ -103,6 +104,16 @@ void AlethiaV3::cleanup()
     
     destroyBuffer(M_VERTEXBUFFER);
     destroyBuffer(M_INDEXBUFFER);
+
+    for (auto& buffer : M_UNIFORMBUFFERS)
+    {
+        destroyBuffer(buffer);
+    }
+    if (M_DESCRIPTORSETLAYOUT != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorSetLayout(M_DEVICE, M_DESCRIPTORSETLAYOUT, nullptr);
+    }
+
     std::cout << "  [cleanup] Geometry buffers destroyed. \n";
 
     for (size_t i = 0; i < M_INFLIGHTFENCES.size(); i++)
