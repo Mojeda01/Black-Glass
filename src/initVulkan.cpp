@@ -35,6 +35,12 @@ void AlethiaV3::initVulkan()
     std::cout << "→ createCommandPool()\n";
     createCommandPool();
 
+    std::cout << "→ createTextureImage()\n";
+    createTextureImage(std::string(ALETHIA_V3_ASSET_DIR) + "/texture.png");
+
+    std::cout << "→ createTextureSampler()\n";
+    createTextureSampler();
+
     std::cout << "→ createVertexBuffer()\n";
     createVertexBuffer();
 

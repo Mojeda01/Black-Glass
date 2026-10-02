@@ -1,3 +1,4 @@
+
 struct UBO {
     float4x4 model;
     float4x4 view;
@@ -7,14 +8,19 @@ struct UBO {
 [[vk::binding(0, 0)]]
 ConstantBuffer<UBO> ubo;
 
+[[vk::binding(1, 0)]]
+Sampler2D texSampler;
+
 struct VSInput {
-    float3 pos   : POSITION;
-    float3 color : COLOR;
+    float3 pos      : POSITION;
+    float3 color    : COLOR;
+    float2 texCoord : TEXCOORD0;
 };
 
 struct VSOutput {
-    float4 pos   : SV_Position;
-    float3 color : COLOR;
+    float4 pos      : SV_Position;
+    float3 color    : COLOR;
+    float2 texCoord : TEXCOORD0;
 };
 
 [shader("vertex")]
@@ -24,11 +30,12 @@ VSOutput vertexMain(VSInput input)
     float4 world = mul(ubo.model, float4(input.pos, 1.0));
     output.pos = mul(ubo.proj, mul(ubo.view, world));
     output.color = input.color;
+    output.texCoord = input.texCoord;
     return output;
 }
 
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target
 {
-    return float4(input.color, 1.0);
+    return texSampler.Sample(input.texCoord) * float4(input.color, 1.0);
 }

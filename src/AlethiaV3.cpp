@@ -105,6 +105,12 @@ void AlethiaV3::cleanup()
     destroyBuffer(M_VERTEXBUFFER);
     destroyBuffer(M_INDEXBUFFER);
 
+    if (M_TEXTURESAMPLER != VK_NULL_HANDLE)
+    {
+        vkDestroySampler(M_DEVICE, M_TEXTURESAMPLER, nullptr);
+    }
+    destroyImage(M_TEXTUREIMAGE);
+
     for (auto& buffer : M_UNIFORMBUFFERS)
     {
         destroyBuffer(buffer);

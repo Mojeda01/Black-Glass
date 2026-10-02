@@ -50,6 +50,7 @@ add_library(alethia_v3 STATIC
     Vulkan/createGeometry.cpp
     Vulkan/createDepthResources.cpp
     Vulkan/createDescriptors.cpp
+    Vulkan/createTexture.cpp
     initVulkan.cpp
 )
 
@@ -76,6 +77,7 @@ endif()
 
 target_compile_definitions(alethia_v3 PRIVATE
     ALETHIA_V3_SHADER_DIR="${V3_SHADER_BIN_DIR}"
+    ALETHIA_V3_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets"
 )
 
 target_compile_definitions(alethia_v3 PUBLIC
