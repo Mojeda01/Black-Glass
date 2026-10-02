@@ -2,6 +2,9 @@
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+
+#include "Camera.h"
+
 #include <vector>
 #include <array>
 #include <string>
@@ -120,9 +123,19 @@ public:
     bool isInitialized() const { return M_INITIALIZED; }
 
     void setFramebufferResized() { m_framebufferResized = true; }
+
+    void onMouseMove(double xpos, double ypos);
+    Camera& camera() { return m_camera; }
 private:
     GLFWwindow* m_window = nullptr;
     bool m_framebufferResized = false;
+
+    Camera m_camera{};
+    bool m_firstMouse = true;
+    double m_lastX = 0.0;
+    double m_lastY = 0.0;
+    float m_deltaTime = 0.0f;
+    float m_lastFrameTime = 0.0f;
 
     // CORE
     VkInstance M_INSTANCE = VK_NULL_HANDLE;

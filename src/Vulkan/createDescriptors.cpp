@@ -67,20 +67,39 @@ void AlethiaV3::createUniformBuffers()
                     << " uniform buffers mapped.\n";
 }
 
+void AlethiaV3::onMouseMove(double xpos, double ypos)
+{
+    if (m_firstMouse)
+    {
+        m_lastX = xpos;
+        m_lastY = ypos;
+        m_firstMouse = false;
+        return;
+    }
+
+    float deltaX = static_cast<float>(xpos - m_lastX);
+    float deltaY = static_cast<float>(ypos - m_lastY);
+    m_lastX = xpos;
+    m_lastY = ypos;
+
+    m_camera.processMouse(deltaX, deltaY);
+}
+
 void AlethiaV3::updateUniformBuffer(uint32_t currentImage)
 {
-    static auto startTime = std::chrono::high_resolution_clock::now();
-    auto currentTime = std::chrono::high_resolution_clock::now();
+    auto currentTime = std::chrono::high_resolution_clock::now(); 
+    static auto startTime = currentTime;
     float time = std::chrono::duration<float>(currentTime - startTime).count();
+
+    m_deltaTime = time - m_lastFrameTime;
+    m_lastFrameTime = time;
+
+    m_camera.processKeyboard(m_window, m_deltaTime);
 
     UniformBufferObject ubo{};
 
-    ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(45.0f),
-                            glm::vec3(0.0f, 0.0f, 1.0f));
-
-    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f),
-                            glm::vec3(0.0f, 0.0f, 0.0f),
-                            glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.model = glm::mat4(1.0f);
+    ubo.view = m_camera.view();
 
     ubo.proj = glm::perspective(glm::radians(45.0f),
                                 M_SWAPCHAINEXTENT.width / static_cast<float>(M_SWAPCHAINEXTENT.height),

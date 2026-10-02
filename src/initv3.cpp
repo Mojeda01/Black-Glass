@@ -70,6 +70,22 @@ void initv3() {
                 auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
                 if (r) r->setFramebufferResized();
             });
+        
+        glfwSetInputMode(window.get(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+        glfwSetCursorPosCallback(window.get(),
+                [](GLFWwindow* w, double xpos, double ypos) {
+                    auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
+                    if (r) r->onMouseMove(xpos, ypos);
+                });
+
+         glfwSetKeyCallback(window.get(),
+                 [](GLFWwindow* w, int key, int, int action, int) {
+                    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+                    {
+                        glfwSetWindowShouldClose(w, GLFW_TRUE);
+                    }
+                 });
 
         while (!window.shouldClose()) {
             window.pollEvents();
