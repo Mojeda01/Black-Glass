@@ -90,6 +90,15 @@ void AlethiaV3::createTextureImage(const std::string& path)
         throw std::runtime_error("Failed to load texture image: " + path);
     }
 
+    createTextureFromPixels(pixels, texWidth, texHeight);
+    stbi_image_free(pixels);
+
+}
+
+void AlethiaV3::createTextureFromPixels(const unsigned char* pixels,
+                                        int texWidth, int texHeight)
+{
+
     VkDeviceSize imageSize = static_cast<VkDeviceSize>(texWidth) * texHeight * 4;
 
     AllocatedBuffer staging = createBuffer(
@@ -102,8 +111,6 @@ void AlethiaV3::createTextureImage(const std::string& path)
     vkMapMemory(M_DEVICE, staging.memory, 0, imageSize, 0, &data);
     std::memcpy(data, pixels, static_cast<size_t>(imageSize));
     vkUnmapMemory(M_DEVICE, staging.memory);
-
-    stbi_image_free(pixels);
 
     M_TEXTUREIMAGE = createImage(
         static_cast<uint32_t>(texWidth),

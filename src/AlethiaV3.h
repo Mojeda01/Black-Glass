@@ -10,6 +10,7 @@
 #include <string>
 #include <optional>
 
+
 // forward struct for query helper.
 struct QueueFamilyIndices{
     std::optional<uint32_t> graphicsFamily;
@@ -74,6 +75,15 @@ struct Vertex
 
         return attributeDescriptions;
     }
+};
+
+struct MeshData {
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+    std::vector<unsigned char> texturePixels;
+    int textureWidth = 0;
+    int textureHeight = 0;
+    bool hasTexture = false;
 };
 
 struct UniformBufferObject 
@@ -204,11 +214,15 @@ private:
     void createPipelineLayout();
     void createGraphicsPipeline();
     void createVertexBuffer();
+    void setGeometry(const std::vector<Vertex>& verts,
+                        const std::vector<uint32_t>& idx);
     void createIndexBuffer();
     void createDescriptorSetLayout();
     void createUniformBuffers();
     void updateUniformBuffer(uint32_t currentImage);
     void createTextureImage(const std::string& path);
+    void createTextureFromPixels(const unsigned char* pixels, int width, int height);
+    MeshData loadGltf(const std::string& path);
     void createTextureSampler();
     void transitionImageLayoutImmediate(VkImage image, VkImageLayout oldLayout,
                                         VkImageLayout newLayout);

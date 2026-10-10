@@ -103,7 +103,7 @@ void AlethiaV3::updateUniformBuffer(uint32_t currentImage)
 
     ubo.proj = glm::perspective(glm::radians(45.0f),
                                 M_SWAPCHAINEXTENT.width / static_cast<float>(M_SWAPCHAINEXTENT.height),
-                                0.1f, 10.0f);
+                                0.1f, 1000.0f);
 
     ubo.proj[1][1] *= -1;
 

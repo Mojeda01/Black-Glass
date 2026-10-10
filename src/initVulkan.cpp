@@ -36,7 +36,17 @@ void AlethiaV3::initVulkan()
     createCommandPool();
 
     std::cout << "→ createTextureImage()\n";
-    createTextureImage(std::string(ALETHIA_V3_ASSET_DIR) + "/texture.png");
+    MeshData mesh = loadGltf(std::string(ALETHIA_V3_ASSET_DIR) + "/BoxTextured.glb");
+    setGeometry(mesh.vertices, mesh.indices);
+
+    if (mesh.hasTexture)
+    {
+        createTextureFromPixels(mesh.texturePixels.data(),
+                                mesh.textureWidth, mesh.textureHeight);
+    }
+    else {
+        createTextureImage(std::string(ALETHIA_V3_ASSET_DIR) + "/texture.png");
+    }
 
     std::cout << "→ createTextureSampler()\n";
     createTextureSampler();
