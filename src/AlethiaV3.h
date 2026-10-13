@@ -322,7 +322,8 @@ private:
     AllocatedImage createImage( uint32_t width, uint32_t height, VkFormat format,
                                 VkImageTiling tiling, VkImageUsageFlags usage,
                                 VkMemoryPropertyFlags properties,
-                                VkImageAspectFlags aspectFlags);
+                                VkImageAspectFlags aspectFlags,
+                                uint32_t mipLevels = 1);
     void destroyImage(AllocatedImage& image);
     AllocatedBuffer createBuffer(   VkDeviceSize size,
                                     VkBufferUsageFlags usage,

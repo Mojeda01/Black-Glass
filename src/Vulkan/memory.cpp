@@ -129,7 +129,8 @@ void AlethiaV3::copyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size)
 AllocatedImage AlethiaV3::createImage(  uint32_t width, uint32_t height, VkFormat format,
                                         VkImageTiling tiling, VkImageUsageFlags usage,
                                         VkMemoryPropertyFlags properties,
-                                        VkImageAspectFlags aspectFlags)
+                                        VkImageAspectFlags aspectFlags,
+                                        uint32_t mipLevels)
 {
     AllocatedImage result{};
     result.format = format;
@@ -140,7 +141,7 @@ AllocatedImage AlethiaV3::createImage(  uint32_t width, uint32_t height, VkForma
     imageInfo.extent.width = width;
     imageInfo.extent.height = height;
     imageInfo.extent.depth = 1;
-    imageInfo.mipLevels = 1;
+    imageInfo.mipLevels = mipLevels;
     imageInfo.arrayLayers = 1;
     imageInfo.format = format;
     imageInfo.tiling = tiling;
@@ -177,7 +178,7 @@ AllocatedImage AlethiaV3::createImage(  uint32_t width, uint32_t height, VkForma
     viewInfo.format = format;
     viewInfo.subresourceRange.aspectMask = aspectFlags;
     viewInfo.subresourceRange.baseMipLevel = 0;
-    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.levelCount = mipLevels;
     viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.layerCount = 1;
 
