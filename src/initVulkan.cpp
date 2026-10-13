@@ -36,7 +36,7 @@ void AlethiaV3::initVulkan()
     createCommandPool();
 
     std::cout << "→ createTextureImage()\n";
-    MeshData mesh = loadGltf(std::string(ALETHIA_V3_ASSET_DIR) + "/BoxTextured.glb");
+    MeshData mesh = loadGltf(std::string(ALETHIA_V3_ASSET_DIR) + "/CarConcept.glb");
     setGeometry(mesh.vertices, mesh.indices);
     setPrimitives(mesh.primitives);
 
