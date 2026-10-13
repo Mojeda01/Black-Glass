@@ -40,10 +40,9 @@ void AlethiaV3::initVulkan()
     setGeometry(mesh.vertices, mesh.indices);
     setPrimitives(mesh.primitives);
 
-    createTextures(mesh.images);
-
     std::cout << "→ createTextureSampler()\n";
     createTextureSampler();
+    createTextures(mesh);
 
     std::cout << "→ createVertexBuffer()\n";
     createVertexBuffer();

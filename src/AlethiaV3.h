@@ -46,6 +46,8 @@ struct Vertex
     glm::vec3 pos;
     glm::vec3 color;
     glm::vec2 texCoord;
+    glm::vec3 normal;
+    glm::vec4 tangent;
 
     static VkVertexInputBindingDescription getBindingDescription()
     {
@@ -56,9 +58,9 @@ struct Vertex
         return bindingDescription;
     }
 
-    static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() 
+    static std::array<VkVertexInputAttributeDescription, 5> getAttributeDescriptions() 
     {
-        std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{}; 
+        std::array<VkVertexInputAttributeDescription, 5> attributeDescriptions{}; 
         attributeDescriptions[0].binding = 0;
         attributeDescriptions[0].location = 0;
         attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
@@ -73,16 +75,27 @@ struct Vertex
         attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
         attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
 
+        attributeDescriptions[3].binding = 0;
+        attributeDescriptions[3].location = 3;
+        attributeDescriptions[3].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[3].offset = offsetof(Vertex, normal);
+
+        attributeDescriptions[4].binding = 0;
+        attributeDescriptions[4].location = 4;
+        attributeDescriptions[4].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        attributeDescriptions[4].offset = offsetof(Vertex, tangent);
+
         return attributeDescriptions;
     }
 };
+
+constexpr uint32_t MATERIAL_TEXTURE_SLOTS = 5;
 
 struct Primitive
 {
     uint32_t firstIndex = 0;
     uint32_t indexCount = 0;
-    int materialIndex = -1;
-    int imageIndex = -1;
+    int materialIndex = 0;
     glm::mat4 worldMatrix = glm::mat4(1.0f);
 };
 
@@ -93,17 +106,57 @@ struct ImageData
     int height = 0;
 };
 
+struct SamplerData
+{
+    VkFilter magFilter = VK_FILTER_LINEAR;
+    VkFilter minFilter = VK_FILTER_LINEAR;
+    VkSamplerAddressMode wrapS = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSamplerAddressMode wrapT = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+};
+
+struct TextureData
+{
+    int image = -1;
+    int sampler = -1;
+    bool srgb = true;
+};
+
+struct MaterialParams
+{
+    glm::vec4 baseColorFactor{ 1.0f };
+    glm::vec4 emissiveFactor{ 0.0f, 0.0f, 0.0f, 0.5f };
+    glm::vec4 factors{ 0.0f, 0.5f, 1.0f, 1.0f };
+    glm::ivec4 flags0{ 0 };
+    glm::ivec4 flags1{ 0 };
+};
+
+struct Material
+{
+    MaterialParams params;
+    std::array<int, MATERIAL_TEXTURE_SLOTS> textures{ -1, -1, -1, -1, -1 };
+};
+
+struct GpuTexture
+{
+    VkImageView view = VK_NULL_HANDLE;
+    VkSampler sampler = VK_NULL_HANDLE;
+};
+
 struct MeshData {
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
     std::vector<Primitive> primitives;
     std::vector<ImageData> images;
+    std::vector<SamplerData> samplers;
+    std::vector<TextureData> textures;
+    std::vector<Material> materials;
 };
 
 struct UniformBufferObject 
 {
     glm::mat4 view;
     glm::mat4 proj;
+    glm::vec4 cameraPos;
 };
 
 // Number of frame the CPU is allowed to record ahead of the GPU.
@@ -182,6 +235,11 @@ private:
     // TEXTURE
     std::vector<AllocatedImage> M_TEXTUREIMAGES;
     AllocatedImage M_FALLBACKTEXTURE{};
+    std::vector<VkSampler> M_SAMPLERS;
+    std::vector<GpuTexture> M_TEXTURES;
+    std::vector<Material> M_MATERIALS;
+    AllocatedBuffer M_MATERIALBUFFER{};
+    VkDeviceSize M_MATERIALSTRIDE = 0;
     VkSampler M_TEXTURESAMPLER = VK_NULL_HANDLE;
 
     // PIPELINE 
@@ -236,8 +294,11 @@ private:
     void createDescriptorSetLayout();
     void createUniformBuffers();
     void updateUniformBuffer(uint32_t currentImage);
-    AllocatedImage createTextureFromPixels(const unsigned char* pixels, int width, int height);
-    void createTextures(const std::vector<ImageData>& images);
+    AllocatedImage createTextureFromPixels(const unsigned char* pixels, int width, int height,
+                                            VkFormat format);
+    void createTextures(const MeshData& mesh);
+    void createMaterialBuffer();
+    VkSampler createSamplerObject(const SamplerData& data);
     MeshData loadGltf(const std::string& path);
     void createTextureSampler();
     void transitionImageLayoutImmediate(VkImage image, VkImageLayout oldLayout,

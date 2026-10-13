@@ -114,6 +114,13 @@ void AlethiaV3::cleanup()
         destroyImage(image);
     }
     M_TEXTUREIMAGES.clear();
+    M_TEXTURES.clear();
+    for (VkSampler sampler : M_SAMPLERS)
+    {
+        vkDestroySampler(M_DEVICE, sampler, nullptr);
+    }
+    M_SAMPLERS.clear();
+    destroyBuffer(M_MATERIALBUFFER);
     destroyImage(M_FALLBACKTEXTURE);
 
     for (auto& buffer : M_UNIFORMBUFFERS)

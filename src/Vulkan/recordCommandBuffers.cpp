@@ -123,17 +123,27 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
 
     for (const Primitive& prim : M_PRIMITIVES)
     {
-        const AllocatedImage& texture =
-            (prim.imageIndex >= 0 && M_TEXTUREIMAGES[prim.imageIndex].view != VK_NULL_HANDLE)
-                ? M_TEXTUREIMAGES[prim.imageIndex]
-                : M_FALLBACKTEXTURE;
+        const Material& material = M_MATERIALS[prim.materialIndex];
 
-        VkDescriptorImageInfo imageInfo{};
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfo.imageView = texture.view;
-        imageInfo.sampler = M_TEXTURESAMPLER;
+        VkDescriptorBufferInfo materialInfo{};
+        materialInfo.buffer = M_MATERIALBUFFER.buffer;
+        materialInfo.offset = M_MATERIALSTRIDE * static_cast<VkDeviceSize>(prim.materialIndex);
+        materialInfo.range = sizeof(MaterialParams);
 
-        std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+        std::array<VkDescriptorImageInfo, MATERIAL_TEXTURE_SLOTS> imageInfos{};
+        for (uint32_t slot = 0; slot < MATERIAL_TEXTURE_SLOTS; slot++)
+        {
+            int textureIndex = material.textures[slot];
+            bool present = textureIndex >= 0 && M_TEXTURES[textureIndex].view != VK_NULL_HANDLE;
+
+            imageInfos[slot].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfos[slot].imageView = present ? M_TEXTURES[textureIndex].view
+                                                  : M_FALLBACKTEXTURE.view;
+            imageInfos[slot].sampler = present ? M_TEXTURES[textureIndex].sampler
+                                                : M_TEXTURESAMPLER;
+        }
+
+        std::array<VkWriteDescriptorSet, 2 + MATERIAL_TEXTURE_SLOTS> descriptorWrites{};
 
         descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[0].dstBinding = 0;
@@ -144,8 +154,17 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
         descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[1].dstBinding = 1;
         descriptorWrites[1].descriptorCount = 1;
-        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptorWrites[1].pImageInfo = &imageInfo;
+        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrites[1].pBufferInfo = &materialInfo;
+
+        for (uint32_t slot = 0; slot < MATERIAL_TEXTURE_SLOTS; slot++)
+        {
+            descriptorWrites[2 + slot].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrites[2 + slot].dstBinding = 2 + slot;
+            descriptorWrites[2 + slot].descriptorCount = 1;
+            descriptorWrites[2 + slot].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            descriptorWrites[2 + slot].pImageInfo = &imageInfos[slot];
+        }
 
         M_PUSHDESCRIPTORFN(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             M_PIPELINELAYOUT, 0,

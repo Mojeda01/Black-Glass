@@ -2,6 +2,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <cstring>
+#include <map>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../stb_image.h"
@@ -80,7 +81,8 @@ void AlethiaV3::copyBufferToImage(VkBuffer buffer, VkImage image,
 }
 
 AllocatedImage AlethiaV3::createTextureFromPixels(const unsigned char* pixels,
-                                        int texWidth, int texHeight)
+                                        int texWidth, int texHeight,
+                                        VkFormat format)
 {
 
     VkDeviceSize imageSize = static_cast<VkDeviceSize>(texWidth) * texHeight * 4;
@@ -99,7 +101,7 @@ AllocatedImage AlethiaV3::createTextureFromPixels(const unsigned char* pixels,
     AllocatedImage texture = createImage(
         static_cast<uint32_t>(texWidth),
         static_cast<uint32_t>(texHeight),
-        VK_FORMAT_R8G8B8A8_SRGB,
+        format,
         VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -129,48 +131,103 @@ AllocatedImage AlethiaV3::createTextureFromPixels(const unsigned char* pixels,
     return texture;
 }
 
-void AlethiaV3::createTextures(const std::vector<ImageData>& images)
+void AlethiaV3::createTextures(const MeshData& mesh)
 {
     const unsigned char white[4] = { 255, 255, 255, 255 };
-    M_FALLBACKTEXTURE = createTextureFromPixels(white, 1, 1);
+    M_FALLBACKTEXTURE = createTextureFromPixels(white, 1, 1, VK_FORMAT_R8G8B8A8_UNORM);
 
-    M_TEXTUREIMAGES.reserve(images.size());
-    for (const ImageData& image : images)
+    for (const SamplerData& data : mesh.samplers)
     {
-        if (image.pixels.empty())
-        {
-            M_TEXTUREIMAGES.push_back(AllocatedImage{});
-            continue;
-        }
-        M_TEXTUREIMAGES.push_back(
-            createTextureFromPixels(image.pixels.data(), image.width, image.height));
+        M_SAMPLERS.push_back(createSamplerObject(data));
     }
+
+    std::map<std::pair<int, bool>, size_t> imageLookup;
+    M_TEXTUREIMAGES.reserve(mesh.textures.size());
+    M_TEXTURES.reserve(mesh.textures.size());
+
+    for (const TextureData& texture : mesh.textures)
+    {
+        auto key = std::make_pair(texture.image, texture.srgb);
+        auto found = imageLookup.find(key);
+        if (found == imageLookup.end())
+        {
+            const ImageData& image = mesh.images[texture.image];
+            M_TEXTUREIMAGES.push_back(createTextureFromPixels(
+                image.pixels.data(), image.width, image.height,
+                texture.srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM));
+            found = imageLookup.emplace(key, M_TEXTUREIMAGES.size() - 1).first;
+        }
+
+        GpuTexture gpu{};
+        gpu.view = M_TEXTUREIMAGES[found->second].view;
+        gpu.sampler = texture.sampler >= 0 ? M_SAMPLERS[texture.sampler] : M_TEXTURESAMPLER;
+        M_TEXTURES.push_back(gpu);
+    }
+
+    M_MATERIALS = mesh.materials;
+    createMaterialBuffer();
 }
 
-void AlethiaV3::createTextureSampler()
+void AlethiaV3::createMaterialBuffer()
+{
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(M_PHYSICALDEVICE, &properties);
+
+    VkDeviceSize alignment = properties.limits.minUniformBufferOffsetAlignment;
+    if (alignment == 0) alignment = 1;
+    M_MATERIALSTRIDE = (sizeof(MaterialParams) + alignment - 1) / alignment * alignment;
+
+    VkDeviceSize bufferSize = M_MATERIALSTRIDE * M_MATERIALS.size();
+    M_MATERIALBUFFER = createBuffer(
+        bufferSize,
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+    );
+
+    void* data = nullptr;
+    vkMapMemory(M_DEVICE, M_MATERIALBUFFER.memory, 0, bufferSize, 0, &data);
+    std::memset(data, 0, static_cast<size_t>(bufferSize));
+    for (size_t i = 0; i < M_MATERIALS.size(); i++)
+    {
+        std::memcpy(static_cast<char*>(data) + i * M_MATERIALSTRIDE,
+                    &M_MATERIALS[i].params, sizeof(MaterialParams));
+    }
+    vkUnmapMemory(M_DEVICE, M_MATERIALBUFFER.memory);
+
+    std::cout << "  [createMaterialBuffer] SUCCESS - " << M_MATERIALS.size()
+                << " materials uploaded.\n";
+}
+
+VkSampler AlethiaV3::createSamplerObject(const SamplerData& data)
 {
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(M_PHYSICALDEVICE, &properties);
 
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.magFilter = VK_FILTER_LINEAR;
-    samplerInfo.minFilter = VK_FILTER_LINEAR;
-    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.magFilter = data.magFilter;
+    samplerInfo.minFilter = data.minFilter;
+    samplerInfo.addressModeU = data.wrapS;
+    samplerInfo.addressModeV = data.wrapT;
+    samplerInfo.addressModeW = data.wrapS;
     samplerInfo.anisotropyEnable = VK_TRUE;
     samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
     samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
     samplerInfo.unnormalizedCoordinates = VK_FALSE;
     samplerInfo.compareEnable = VK_FALSE;
-    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipmapMode = data.minFilter == VK_FILTER_NEAREST
+        ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR;
 
-    if (vkCreateSampler(M_DEVICE, &samplerInfo, nullptr, &M_TEXTURESAMPLER) != VK_SUCCESS)
+    VkSampler sampler = VK_NULL_HANDLE;
+    if (vkCreateSampler(M_DEVICE, &samplerInfo, nullptr, &sampler) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create texture sampler!");
     }
+    return sampler;
+}
 
-    std::cout << "  [createTextureSampler] SUCCESS - Sampler created (anisotropy "
-        << properties.limits.maxSamplerAnisotropy << ").\n";
+void AlethiaV3::createTextureSampler()
+{
+    M_TEXTURESAMPLER = createSamplerObject(SamplerData{});
+    std::cout << "  [createTextureSampler] SUCCESS - Default sampler created.\n";
 }
