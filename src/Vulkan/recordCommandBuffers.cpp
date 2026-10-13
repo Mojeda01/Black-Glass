@@ -145,7 +145,10 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
                         static_cast<uint32_t>(descriptorWrites.size()),
                         descriptorWrites.data());
 
-    vkCmdDrawIndexed(commandBuffer, M_INDEXCOUNT, 1, 0, 0, 0);
+    for (const Primitive& prim : M_PRIMITIVES)
+    {
+        vkCmdDrawIndexed(commandBuffer, prim.indexCount, 1, prim.firstIndex, 0, 0);
+    }
 
     vkCmdEndRendering(commandBuffer);
 

@@ -77,9 +77,17 @@ struct Vertex
     }
 };
 
+struct Primitive
+{
+    uint32_t firstIndex = 0;
+    uint32_t indexCount = 0;
+    int materialIndex = -1;
+};
+
 struct MeshData {
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
+    std::vector<Primitive> primitives;
     std::vector<unsigned char> texturePixels;
     int textureWidth = 0;
     int textureHeight = 0;
@@ -182,6 +190,7 @@ private:
     AllocatedBuffer M_VERTEXBUFFER{};
     AllocatedBuffer M_INDEXBUFFER{};
     uint32_t M_INDEXCOUNT = 0;
+    std::vector<Primitive> M_PRIMITIVES;
     
     // UNIFORMS
     std::vector<AllocatedBuffer> M_UNIFORMBUFFERS;
@@ -216,6 +225,7 @@ private:
     void createVertexBuffer();
     void setGeometry(const std::vector<Vertex>& verts,
                         const std::vector<uint32_t>& idx);
+    void setPrimitives(const std::vector<Primitive>& prims);
     void createIndexBuffer();
     void createDescriptorSetLayout();
     void createUniformBuffers();

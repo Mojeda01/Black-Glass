@@ -43,81 +43,81 @@ MeshData AlethiaV3::loadGltf(const std::string& path)
         throw std::runtime_error("glTF contains no mesh primitives");
     }
 
-    const tinygltf::Primitive& prim = model.meshes[0].primitives[0];
-
-    auto posIt = prim.attributes.find("POSITION");
-    if (posIt == prim.attributes.end())
-    {
-        throw std::runtime_error("Primitive has no POSITION attribute!");
-    }
-
-    const tinygltf::Accessor& posAccessor = model.accessors[posIt->second];
-    size_t vertexCount = posAccessor.count;
-
-    const tinygltf::Accessor* uvAccessor = nullptr;
-    auto uvIt = prim.attributes.find("TEXCOORD_0");
-    if (uvIt != prim.attributes.end())
-    {
-        uvAccessor = &model.accessors[uvIt->second];
-    }
-
     MeshData mesh;
-    mesh.vertices.reserve(vertexCount);
 
-    for (size_t i = 0; i < vertexCount; i++)
+    for (const tinygltf::Primitive& prim : model.meshes[0].primitives)
     {
-        Vertex v{};
+        auto posIt = prim.attributes.find("POSITION");
+        if (posIt == prim.attributes.end()) continue;
+        if (prim.indices < 0) continue;
 
-        const float* pos = reinterpret_cast<const float*>(
-            accessorElement(model, posAccessor, i)
-        );
-        v.pos = { pos[0], pos[1], pos[2] };
-        v.color = { 1.0f, 1.0f, 1.0f };
+        uint32_t vertexOffset = static_cast<uint32_t>(mesh.vertices.size());
 
-        if (uvAccessor)
+        Primitive record{};
+        record.firstIndex = static_cast<uint32_t>(mesh.indices.size());
+        record.materialIndex = prim.material;
+
+        const tinygltf::Accessor& posAccessor = model.accessors[posIt->second];
+
+        const tinygltf::Accessor* uvAccessor = nullptr;
+        auto uvIt = prim.attributes.find("TEXCOORD_0");
+        if (uvIt != prim.attributes.end())
         {
-            const float* uv = reinterpret_cast<const float*>(
-                accessorElement(model, *uvAccessor, i)
-            );
-            v.texCoord = { uv[0], uv[1] };
+            uvAccessor = &model.accessors[uvIt->second];
         }
 
-        mesh.vertices.push_back(v);
-    }
-
-    if (prim.indices < 0)
-    {
-        throw std::runtime_error("Non-indexed primitives are not supported!");
-    }
-
-    const tinygltf::Accessor& idxAccessor = model.accessors[prim.indices];
-    mesh.indices.reserve(idxAccessor.count);
-
-    for (size_t i = 0; i < idxAccessor.count; i++)
-    {
-        const unsigned char* raw = accessorElement(model, idxAccessor, i);
-
-        switch (idxAccessor.componentType)
+        for (size_t i = 0; i < posAccessor.count; i++)
         {
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
-                mesh.indices.push_back(*raw);
-                break;
+            Vertex v{};
 
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
-                mesh.indices.push_back(*reinterpret_cast<const uint16_t*>(raw));
-                break;
+            const float* pos = reinterpret_cast<const float*> (
+                    accessorElement(model, posAccessor, i));
+            v.pos = { pos[0], pos[1], pos[2] };
+            v.color = { 1.0f, 1.0f, 1.0f };
 
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
-                mesh.indices.push_back(*reinterpret_cast<const uint32_t*>(raw));
-                break;
-            default:
-                throw std::runtime_error("Unsupported index component type!");
+            if (uvAccessor)
+            {
+                const float* uv = reinterpret_cast<const float*>(
+                        accessorElement(model, *uvAccessor, i));
+                v.texCoord = { uv[0], uv[1] };
+            }
+
+            mesh.vertices.push_back(v);
         }
+
+        const tinygltf::Accessor& idxAccessor = model.accessors[prim.indices];
+
+        for (size_t i = 0; i < idxAccessor.count; i++)
+        {
+            const unsigned char* raw = accessorElement(model, idxAccessor, i);
+            uint32_t index = 0;
+
+            switch (idxAccessor.componentType)
+            {
+                case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+                    index = *raw; break;
+                case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+                    index = *reinterpret_cast<const uint16_t*>(raw); break;
+                case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
+                    index = *reinterpret_cast<const uint32_t*>(raw); break;
+                default:
+                    throw std::runtime_error("Unsupported index component type!");
+            }
+            mesh.indices.push_back(index + vertexOffset);
+        }
+        record.indexCount = static_cast<uint32_t>(mesh.indices.size()) - record.firstIndex;
+        mesh.primitives.push_back(record);
     }
 
-    if (prim.material >= 0) 
+    if (mesh.primitives.empty())
     {
-        const tinygltf::Material& mat = model.materials[prim.material];
+        throw std::runtime_error("glTF mesh has no indexed primitives with POSITION!");
+    }
+
+    int firstMaterial = mesh.primitives.empty() ? -1 : mesh.primitives[0].materialIndex;
+    if (firstMaterial >= 0) 
+    {
+        const tinygltf::Material& mat = model.materials[firstMaterial];
         int texIndex = mat.pbrMetallicRoughness.baseColorTexture.index;
 
         if (texIndex >= 0)
@@ -140,6 +140,7 @@ MeshData AlethiaV3::loadGltf(const std::string& path)
 
     std::cout << "  [loadGltf] SUCCESS - " << mesh.vertices.size() << " vertices, "
                 << mesh.indices.size() << " indices, texture "
-                << mesh.textureWidth << "x" << mesh.textureHeight << ".\n";
+                << mesh.textureWidth << "x" << mesh.textureHeight << ", "
+                << mesh.primitives.size() << " primitives.\n";
     return mesh;
 }

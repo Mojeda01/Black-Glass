@@ -38,6 +38,7 @@ void AlethiaV3::initVulkan()
     std::cout << "→ createTextureImage()\n";
     MeshData mesh = loadGltf(std::string(ALETHIA_V3_ASSET_DIR) + "/BoxTextured.glb");
     setGeometry(mesh.vertices, mesh.indices);
+    setPrimitives(mesh.primitives);
 
     if (mesh.hasTexture)
     {

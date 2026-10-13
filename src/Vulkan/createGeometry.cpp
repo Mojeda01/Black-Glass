@@ -18,6 +18,11 @@ void AlethiaV3::setGeometry(    const std::vector<Vertex>& verts,
     INDICES = idx;
 }
 
+void AlethiaV3::setPrimitives(const std::vector<Primitive>& prims)
+{
+    M_PRIMITIVES = prims;
+}
+
 void AlethiaV3::createVertexBuffer()
 {
     std::cout << "  [createVertexBuffer] Starting ... \n";
