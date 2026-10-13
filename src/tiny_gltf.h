@@ -3241,7 +3241,7 @@ static bool ParseNumberProperty(double *ret, std::string *err, const json &o,
   }
 
   double doubleValue;
-  bool isDouble = GetDouble(GetValue(it), doubleValue);
+  bool isDouble = GetNumber(GetValue(it), doubleValue);
 
   if (!isDouble) {
     if (required) {

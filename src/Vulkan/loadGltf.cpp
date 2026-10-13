@@ -284,6 +284,55 @@ namespace
         return glm::translate(glm::mat4(1.0f), t) * glm::mat4_cast(r) * glm::scale(glm::mat4(1.0f), sc);
     }
 
+    glm::mat3 textureTransform(const tinygltf::ExtensionMap& extensions)
+    {
+        auto found = extensions.find("KHR_texture_transform");
+        if (found == extensions.end()) return glm::mat3(1.0f);
+
+        const tinygltf::Value& ext = found->second;
+
+        glm::vec2 offset(0.0f);
+        glm::vec2 scale(1.0f);
+        float rotation = 0.0f;
+
+        if (ext.Has("offset") && ext.Get("offset").IsArray() && ext.Get("offset").ArrayLen() >= 2)
+        {
+            offset = glm::vec2(ext.Get("offset").Get(0).GetNumberAsDouble(),
+                               ext.Get("offset").Get(1).GetNumberAsDouble());
+        }
+        if (ext.Has("scale") && ext.Get("scale").IsArray() && ext.Get("scale").ArrayLen() >= 2)
+        {
+            scale = glm::vec2(ext.Get("scale").Get(0).GetNumberAsDouble(),
+                              ext.Get("scale").Get(1).GetNumberAsDouble());
+        }
+        if (ext.Has("rotation"))
+        {
+            rotation = static_cast<float>(ext.Get("rotation").GetNumberAsDouble());
+        }
+
+        float c = std::cos(rotation);
+        float s = std::sin(rotation);
+
+        glm::mat3 translationMatrix(1.0f, 0.0f, 0.0f,
+                                    0.0f, 1.0f, 0.0f,
+                                    offset.x, offset.y, 1.0f);
+        glm::mat3 rotationMatrix(c, s, 0.0f,
+                                 -s, c, 0.0f,
+                                 0.0f, 0.0f, 1.0f);
+        glm::mat3 scaleMatrix(scale.x, 0.0f, 0.0f,
+                              0.0f, scale.y, 0.0f,
+                              0.0f, 0.0f, 1.0f);
+
+        return translationMatrix * rotationMatrix * scaleMatrix;
+    }
+
+    void setSlotTransform(MaterialParams& params, int slot, const tinygltf::ExtensionMap& extensions)
+    {
+        glm::mat3 m = textureTransform(extensions);
+        params.uvLinear[slot] = glm::vec4(m[0][0], m[1][0], m[0][1], m[1][1]);
+        params.uvOffset[slot] = glm::vec4(m[2][0], m[2][1], 0.0f, 0.0f);
+    }
+
     VkFilter toFilter(int gl)
     {
         switch (gl)
@@ -404,6 +453,12 @@ MeshData AlethiaV3::loadGltf(const std::string& path)
         material.textures[2] = resolveTexture(m.normalTexture.index, false);
         material.textures[3] = resolveTexture(m.occlusionTexture.index, false);
         material.textures[4] = resolveTexture(m.emissiveTexture.index, true);
+
+        setSlotTransform(material.params, 0, pbr.baseColorTexture.extensions);
+        setSlotTransform(material.params, 1, pbr.metallicRoughnessTexture.extensions);
+        setSlotTransform(material.params, 2, m.normalTexture.extensions);
+        setSlotTransform(material.params, 3, m.occlusionTexture.extensions);
+        setSlotTransform(material.params, 4, m.emissiveTexture.extensions);
 
         material.params.flags0 = glm::ivec4(material.textures[0] >= 0, material.textures[1] >= 0,
                                             material.textures[2] >= 0, material.textures[3] >= 0);

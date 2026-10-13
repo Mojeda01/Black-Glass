@@ -128,6 +128,11 @@ struct MaterialParams
     glm::vec4 factors{ 0.0f, 0.5f, 1.0f, 1.0f };
     glm::ivec4 flags0{ 0 };
     glm::ivec4 flags1{ 0 };
+    glm::vec4 uvLinear[MATERIAL_TEXTURE_SLOTS] = {
+        { 1.0f, 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f, 1.0f },
+        { 1.0f, 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }
+    };
+    glm::vec4 uvOffset[MATERIAL_TEXTURE_SLOTS] = {};
 };
 
 struct Material
@@ -157,6 +162,7 @@ struct UniformBufferObject
     glm::mat4 view;
     glm::mat4 proj;
     glm::vec4 cameraPos;
+    glm::vec4 debugParams;
 };
 
 // Number of frame the CPU is allowed to record ahead of the GPU.
@@ -201,6 +207,9 @@ public:
     void setFramebufferResized() { m_framebufferResized = true; }
 
     void onMouseMove(double xpos, double ypos);
+    void setMouseCaptured(bool captured);
+    void setDebugView(int view) { m_debugView = view; }
+    bool mouseCaptured() const { return m_mouseCaptured; }
     Camera& camera() { return m_camera; }
 private:
     GLFWwindow* m_window = nullptr;
@@ -208,6 +217,8 @@ private:
 
     Camera m_camera{};
     bool m_firstMouse = true;
+    bool m_mouseCaptured = false;
+    int m_debugView = 0;
     double m_lastX = 0.0;
     double m_lastY = 0.0;
     float m_deltaTime = 0.0f;

@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <cstring>
 #include <chrono>
+#include <algorithm>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -71,8 +72,23 @@ void AlethiaV3::createUniformBuffers()
                     << " uniform buffers mapped.\n";
 }
 
+void AlethiaV3::setMouseCaptured(bool captured)
+{
+    m_mouseCaptured = captured;
+    glfwSetInputMode(m_window, GLFW_CURSOR, captured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+    if (captured)
+    {
+        m_firstMouse = true;
+    }
+}
+
 void AlethiaV3::onMouseMove(double xpos, double ypos)
 {
+    if (!m_mouseCaptured)
+    {
+        return;
+    }
+
     if (m_firstMouse)
     {
         m_lastX = xpos;
@@ -95,10 +111,13 @@ void AlethiaV3::updateUniformBuffer(uint32_t currentImage)
     static auto startTime = currentTime;
     float time = std::chrono::duration<float>(currentTime - startTime).count();
 
-    m_deltaTime = time - m_lastFrameTime;
+    m_deltaTime = std::min(time - m_lastFrameTime, 0.1f);
     m_lastFrameTime = time;
 
-    m_camera.processKeyboard(m_window, m_deltaTime);
+    if (m_mouseCaptured)
+    {
+        m_camera.processKeyboard(m_window, m_deltaTime);
+    }
 
     UniformBufferObject ubo{};
 
@@ -111,6 +130,7 @@ void AlethiaV3::updateUniformBuffer(uint32_t currentImage)
     ubo.proj[1][1] *= -1;
 
     ubo.cameraPos = glm::vec4(m_camera.position, 1.0f);
+    ubo.debugParams = glm::vec4(static_cast<float>(m_debugView), 0.0f, 0.0f, 0.0f);
 
     std::memcpy(M_UNIFORMBUFFERSMAPPED[currentImage], &ubo, sizeof(ubo));
 }

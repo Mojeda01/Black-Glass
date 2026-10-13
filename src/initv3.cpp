@@ -71,7 +71,22 @@ void initv3() {
                 if (r) r->setFramebufferResized();
             });
         
-        glfwSetInputMode(window.get(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        renderer.setMouseCaptured(glfwGetWindowAttrib(window.get(), GLFW_FOCUSED) == GLFW_TRUE);
+
+        glfwSetWindowFocusCallback(window.get(),
+                [](GLFWwindow* w, int focused) {
+                    auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
+                    if (r && !focused) r->setMouseCaptured(false);
+                });
+
+        glfwSetMouseButtonCallback(window.get(),
+                [](GLFWwindow* w, int button, int action, int) {
+                    auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
+                    if (r && button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS && !r->mouseCaptured())
+                    {
+                        r->setMouseCaptured(true);
+                    }
+                });
 
         glfwSetCursorPosCallback(window.get(),
                 [](GLFWwindow* w, double xpos, double ypos) {
@@ -85,10 +100,23 @@ void initv3() {
                     {
                         glfwSetWindowShouldClose(w, GLFW_TRUE);
                     }
+
+                    auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
+                    if (r && action == GLFW_PRESS && key >= GLFW_KEY_0 && key <= GLFW_KEY_9)
+                    {
+                        r->setDebugView(key - GLFW_KEY_0);
+                    }
                  });
 
         while (!window.shouldClose()) {
             window.pollEvents();
+
+            if (glfwGetWindowAttrib(window.get(), GLFW_ICONIFIED))
+            {
+                glfwWaitEvents();
+                continue;
+            }
+
             renderer.drawFrame();
         }
     }
