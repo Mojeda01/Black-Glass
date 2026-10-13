@@ -82,21 +82,26 @@ struct Primitive
     uint32_t firstIndex = 0;
     uint32_t indexCount = 0;
     int materialIndex = -1;
+    int imageIndex = -1;
+    glm::mat4 worldMatrix = glm::mat4(1.0f);
+};
+
+struct ImageData
+{
+    std::vector<unsigned char> pixels;
+    int width = 0;
+    int height = 0;
 };
 
 struct MeshData {
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
     std::vector<Primitive> primitives;
-    std::vector<unsigned char> texturePixels;
-    int textureWidth = 0;
-    int textureHeight = 0;
-    bool hasTexture = false;
+    std::vector<ImageData> images;
 };
 
 struct UniformBufferObject 
 {
-    glm::mat4 model;
     glm::mat4 view;
     glm::mat4 proj;
 };
@@ -175,7 +180,8 @@ private:
     AllocatedImage M_DEPTHIMAGE{};
     
     // TEXTURE
-    AllocatedImage M_TEXTUREIMAGE{};
+    std::vector<AllocatedImage> M_TEXTUREIMAGES;
+    AllocatedImage M_FALLBACKTEXTURE{};
     VkSampler M_TEXTURESAMPLER = VK_NULL_HANDLE;
 
     // PIPELINE 
@@ -230,8 +236,8 @@ private:
     void createDescriptorSetLayout();
     void createUniformBuffers();
     void updateUniformBuffer(uint32_t currentImage);
-    void createTextureImage(const std::string& path);
-    void createTextureFromPixels(const unsigned char* pixels, int width, int height);
+    AllocatedImage createTextureFromPixels(const unsigned char* pixels, int width, int height);
+    void createTextures(const std::vector<ImageData>& images);
     MeshData loadGltf(const std::string& path);
     void createTextureSampler();
     void transitionImageLayoutImmediate(VkImage image, VkImageLayout oldLayout,

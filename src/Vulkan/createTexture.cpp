@@ -79,23 +79,7 @@ void AlethiaV3::copyBufferToImage(VkBuffer buffer, VkImage image,
     endSingleTimeCommands(commandBuffer);
 }
 
-void AlethiaV3::createTextureImage(const std::string& path)
-{
-    int texWidth, texHeight, texChannels;
-    stbi_uc* pixels = stbi_load(path.c_str(), &texWidth, &texHeight,
-                                &texChannels, STBI_rgb_alpha);
-
-    if (!pixels)
-    {
-        throw std::runtime_error("Failed to load texture image: " + path);
-    }
-
-    createTextureFromPixels(pixels, texWidth, texHeight);
-    stbi_image_free(pixels);
-
-}
-
-void AlethiaV3::createTextureFromPixels(const unsigned char* pixels,
+AllocatedImage AlethiaV3::createTextureFromPixels(const unsigned char* pixels,
                                         int texWidth, int texHeight)
 {
 
@@ -112,7 +96,7 @@ void AlethiaV3::createTextureFromPixels(const unsigned char* pixels,
     std::memcpy(data, pixels, static_cast<size_t>(imageSize));
     vkUnmapMemory(M_DEVICE, staging.memory);
 
-    M_TEXTUREIMAGE = createImage(
+    AllocatedImage texture = createImage(
         static_cast<uint32_t>(texWidth),
         static_cast<uint32_t>(texHeight),
         VK_FORMAT_R8G8B8A8_SRGB,
@@ -123,25 +107,44 @@ void AlethiaV3::createTextureFromPixels(const unsigned char* pixels,
     );
 
     transitionImageLayoutImmediate(
-        M_TEXTUREIMAGE.image,
+        texture.image,
         VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
     );
     
-    copyBufferToImage(staging.buffer, M_TEXTUREIMAGE.image,
+    copyBufferToImage(staging.buffer, texture.image,
         static_cast<uint32_t>(texWidth),
         static_cast<uint32_t>(texHeight)
     );
 
     transitionImageLayoutImmediate(
-        M_TEXTUREIMAGE.image,
+        texture.image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
     );
 
     destroyBuffer(staging);
-    std::cout << "  [createTextureImage] SUCCESS - " << texWidth << "x" << texHeight
+    std::cout << "  [createTextureFromPixels] SUCCESS - " << texWidth << "x" << texHeight
         << " texture uploaded.\n";
+    return texture;
+}
+
+void AlethiaV3::createTextures(const std::vector<ImageData>& images)
+{
+    const unsigned char white[4] = { 255, 255, 255, 255 };
+    M_FALLBACKTEXTURE = createTextureFromPixels(white, 1, 1);
+
+    M_TEXTUREIMAGES.reserve(images.size());
+    for (const ImageData& image : images)
+    {
+        if (image.pixels.empty())
+        {
+            M_TEXTUREIMAGES.push_back(AllocatedImage{});
+            continue;
+        }
+        M_TEXTUREIMAGES.push_back(
+            createTextureFromPixels(image.pixels.data(), image.width, image.height));
+    }
 }
 
 void AlethiaV3::createTextureSampler()

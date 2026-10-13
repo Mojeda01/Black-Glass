@@ -121,32 +121,39 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
     bufferInfo.offset = 0;
     bufferInfo.range = sizeof(UniformBufferObject);
 
-    VkDescriptorImageInfo imageInfo{};
-    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    imageInfo.imageView = M_TEXTUREIMAGE.view;
-    imageInfo.sampler = M_TEXTURESAMPLER;
-
-    std::array<VkWriteDescriptorSet, 2> descriptorWrites{}; 
-
-    descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrites[0].dstBinding = 0;
-    descriptorWrites[0].descriptorCount = 1;
-    descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    descriptorWrites[0].pBufferInfo = &bufferInfo;
-
-    descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrites[1].dstBinding = 1;
-    descriptorWrites[1].descriptorCount = 1;
-    descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    descriptorWrites[1].pImageInfo = &imageInfo;
-
-    M_PUSHDESCRIPTORFN(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                        M_PIPELINELAYOUT, 0,
-                        static_cast<uint32_t>(descriptorWrites.size()),
-                        descriptorWrites.data());
-
     for (const Primitive& prim : M_PRIMITIVES)
     {
+        const AllocatedImage& texture =
+            (prim.imageIndex >= 0 && M_TEXTUREIMAGES[prim.imageIndex].view != VK_NULL_HANDLE)
+                ? M_TEXTUREIMAGES[prim.imageIndex]
+                : M_FALLBACKTEXTURE;
+
+        VkDescriptorImageInfo imageInfo{};
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfo.imageView = texture.view;
+        imageInfo.sampler = M_TEXTURESAMPLER;
+
+        std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+
+        descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[0].dstBinding = 0;
+        descriptorWrites[0].descriptorCount = 1;
+        descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+        descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[1].dstBinding = 1;
+        descriptorWrites[1].descriptorCount = 1;
+        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[1].pImageInfo = &imageInfo;
+
+        M_PUSHDESCRIPTORFN(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            M_PIPELINELAYOUT, 0,
+                            static_cast<uint32_t>(descriptorWrites.size()),
+                            descriptorWrites.data());
+
+        vkCmdPushConstants(commandBuffer, M_PIPELINELAYOUT, VK_SHADER_STAGE_VERTEX_BIT,
+                            0, sizeof(glm::mat4), &prim.worldMatrix);
         vkCmdDrawIndexed(commandBuffer, prim.indexCount, 1, prim.firstIndex, 0, 0);
     }
 

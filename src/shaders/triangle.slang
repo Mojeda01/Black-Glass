@@ -1,9 +1,15 @@
 
 struct UBO {
-    float4x4 model;
     float4x4 view;
     float4x4 proj;
 };
+
+struct PushData {
+    float4x4 model;
+};
+
+[[vk::push_constant]]
+PushData push;
 
 [[vk::binding(0, 0)]]
 ConstantBuffer<UBO> ubo;
@@ -27,7 +33,7 @@ struct VSOutput {
 VSOutput vertexMain(VSInput input)
 {
     VSOutput output;
-    float4 world = mul(ubo.model, float4(input.pos, 1.0));
+    float4 world = mul(push.model, float4(input.pos, 1.0));
     output.pos = mul(ubo.proj, mul(ubo.view, world));
     output.color = input.color;
     output.texCoord = input.texCoord;

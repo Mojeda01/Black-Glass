@@ -40,14 +40,7 @@ void AlethiaV3::initVulkan()
     setGeometry(mesh.vertices, mesh.indices);
     setPrimitives(mesh.primitives);
 
-    if (mesh.hasTexture)
-    {
-        createTextureFromPixels(mesh.texturePixels.data(),
-                                mesh.textureWidth, mesh.textureHeight);
-    }
-    else {
-        createTextureImage(std::string(ALETHIA_V3_ASSET_DIR) + "/texture.png");
-    }
+    createTextures(mesh.images);
 
     std::cout << "→ createTextureSampler()\n";
     createTextureSampler();
