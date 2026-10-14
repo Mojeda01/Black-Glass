@@ -291,6 +291,9 @@ public:
     bool uiWantsKeyboard() const;
     void toggleMouseCapture();
     void toggleUi();
+    void requestQuit();
+    bool quitPromptOpen() const { return m_quitPrompt; }
+    void cancelQuitPrompt() { m_quitPrompt = false; }
     void onLeftPress(bool shiftHeld);
     void onLeftRelease();
     void onRightPress();
@@ -311,6 +314,7 @@ private:
     bool m_shadowDirty = false;
     bool m_imguiReady = false;
     bool m_showUi = true;
+    bool m_quitPrompt = false;
     VkFormat m_uiColorFormat = VK_FORMAT_UNDEFINED;
     double m_lastX = 0.0;
     double m_lastY = 0.0;
@@ -476,6 +480,7 @@ private:
     void bakeShadowMap();
     void beginUiFrame();
     void buildUi();
+    void drawQuitPrompt();
     void shutdownImGui();
 
     // PIPELINE 

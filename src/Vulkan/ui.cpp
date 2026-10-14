@@ -132,12 +132,12 @@ void BlackGlass::shutdownImGui()
 
 bool BlackGlass::uiWantsMouse() const
 {
-    return m_imguiReady && m_showUi && ImGui::GetIO().WantCaptureMouse;
+    return m_imguiReady && (m_showUi || m_quitPrompt) && ImGui::GetIO().WantCaptureMouse;
 }
 
 bool BlackGlass::uiWantsKeyboard() const
 {
-    return m_imguiReady && m_showUi && ImGui::GetIO().WantCaptureKeyboard;
+    return m_imguiReady && (m_showUi || m_quitPrompt) && ImGui::GetIO().WantCaptureKeyboard;
 }
 
 void BlackGlass::toggleMouseCapture()
@@ -152,7 +152,7 @@ void BlackGlass::toggleUi()
 
 void BlackGlass::beginUiFrame()
 {
-    if (!m_imguiReady || !m_showUi)
+    if (!m_imguiReady || (!m_showUi && !m_quitPrompt))
     {
         return;
     }
@@ -164,8 +164,59 @@ void BlackGlass::beginUiFrame()
     ImGui::Render();
 }
 
+void BlackGlass::requestQuit()
+{
+    if (!m_imguiReady)
+    {
+        glfwSetWindowShouldClose(m_window, GLFW_TRUE);
+        return;
+    }
+    if (ImGui::IsAnyItemActive())
+    {
+        return;
+    }
+    setMouseCaptured(false);
+    m_quitPrompt = true;
+}
+
+void BlackGlass::drawQuitPrompt()
+{
+    if (!m_quitPrompt)
+    {
+        return;
+    }
+
+    ImGui::OpenPopup("Quit Black Glass?");
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Quit Black Glass?", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
+    {
+        ImGui::Text("Are you sure you want to quit?");
+        ImGui::Spacing();
+        if (ImGui::Button("Quit", ImVec2(120.0f, 0.0f)))
+        {
+            glfwSetWindowShouldClose(m_window, GLFW_TRUE);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)))
+        {
+            m_quitPrompt = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::TextDisabled("Esc: cancel");
+        ImGui::EndPopup();
+    }
+}
+
 void BlackGlass::buildUi()
 {
+    if (!m_showUi)
+    {
+        drawQuitPrompt();
+        return;
+    }
+
     ImGuiIO& io = ImGui::GetIO();
 
     ImGui::SetNextWindowPos(ImVec2(12.0f, 12.0f), ImGuiCond_FirstUseEver);
@@ -400,4 +451,6 @@ void BlackGlass::buildUi()
     }
 
     ImGui::End();
+
+    drawQuitPrompt();
 }

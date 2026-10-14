@@ -5,6 +5,8 @@
 #include <chrono>
 #include <algorithm>
 
+#include "../imgui/imgui.h"
+
 #include <glm/gtc/matrix_transform.hpp>
 
 void BlackGlass::createDescriptorSetLayout()
@@ -112,6 +114,10 @@ void BlackGlass::setMouseCaptured(bool captured)
     if (captured)
     {
         m_firstMouse = true;
+        if (m_imguiReady)
+        {
+            ImGui::SetWindowFocus(nullptr);
+        }
     }
 }
 
@@ -147,7 +153,7 @@ void BlackGlass::updateUniformBuffer(uint32_t currentImage)
     m_deltaTime = std::min(time - m_lastFrameTime, 0.1f);
     m_lastFrameTime = time;
 
-    if (m_mouseCaptured)
+    if (m_mouseCaptured && !m_quitPrompt && !(m_imguiReady && ImGui::GetIO().WantTextInput))
     {
         m_camera.processKeyboard(m_window, m_deltaTime);
     }

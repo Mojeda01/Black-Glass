@@ -116,12 +116,24 @@ void initBlackGlass() {
 
          glfwSetKeyCallback(window.get(),
                  [](GLFWwindow* w, int key, int, int action, int) {
+                    auto* r = static_cast<BlackGlass*>(glfwGetWindowUserPointer(w));
                     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
                     {
-                        glfwSetWindowShouldClose(w, GLFW_TRUE);
+                        if (!r)
+                        {
+                            glfwSetWindowShouldClose(w, GLFW_TRUE);
+                        }
+                        else if (r->quitPromptOpen())
+                        {
+                            r->cancelQuitPrompt();
+                        }
+                        else
+                        {
+                            r->requestQuit();
+                        }
+                        return;
                     }
 
-                    auto* r = static_cast<BlackGlass*>(glfwGetWindowUserPointer(w));
                     if (r && action == GLFW_PRESS && key == GLFW_KEY_TAB)
                     {
                         r->toggleMouseCapture();
