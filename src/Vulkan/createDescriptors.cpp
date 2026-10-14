@@ -38,6 +38,16 @@ void AlethiaV3::createDescriptorSetLayout()
         bindings[index].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     }
 
+    bindings[SHADOW_BINDING_INDEX].binding = SHADOW_BINDING_INDEX;
+    bindings[SHADOW_BINDING_INDEX].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[SHADOW_BINDING_INDEX].descriptorCount = 1;
+    bindings[SHADOW_BINDING_INDEX].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    bindings[SCENE_COLOR_BINDING_INDEX].binding = SCENE_COLOR_BINDING_INDEX;
+    bindings[SCENE_COLOR_BINDING_INDEX].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[SCENE_COLOR_BINDING_INDEX].descriptorCount = 1;
+    bindings[SCENE_COLOR_BINDING_INDEX].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
@@ -140,8 +150,17 @@ void AlethiaV3::updateUniformBuffer(uint32_t currentImage)
 
     ubo.invViewProj = glm::inverse(ubo.proj * ubo.view);
 
+    ubo.lightViewProj = M_LIGHTVIEWPROJ;
+    ubo.lightDir = glm::vec4(glm::normalize(M_LIGHTDIR), 0.0f);
+    ubo.shadowParams = glm::vec4(1.0f / static_cast<float>(SHADOW_MAP_SIZE), M_SHADOWNORMALBIAS, 1.0f, 0.0f);
+    ubo.groundParams = M_GROUNDPARAMS;
+    ubo.groundExtent = M_GROUNDEXTENT;
+
     ubo.cameraPos = glm::vec4(m_camera.position, 1.0f);
-    ubo.debugParams = glm::vec4(static_cast<float>(m_debugView), 0.0f, 0.0f, 0.0f);
+    ubo.debugParams = glm::vec4(static_cast<float>(m_debugView),
+                                static_cast<float>(M_SCENECOPYMIPS - 1),
+                                static_cast<float>(M_SWAPCHAINEXTENT.width),
+                                static_cast<float>(M_SWAPCHAINEXTENT.height));
     ubo.iblParams = glm::vec4(M_IBLMAXMIP, 1.0f, M_IBLFROMFILE ? 0.0f : 1.0f, 0.0f);
 
     std::memcpy(M_UNIFORMBUFFERSMAPPED[currentImage], &ubo, sizeof(ubo));

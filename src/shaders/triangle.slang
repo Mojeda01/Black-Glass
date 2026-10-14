@@ -2,9 +2,14 @@ struct FrameData {
     float4x4 view;
     float4x4 proj;
     float4x4 invViewProj;
+    float4x4 lightViewProj;
     float4 cameraPos;
     float4 debugParams;
     float4 iblParams;
+    float4 lightDir;
+    float4 shadowParams;
+    float4 groundParams;
+    float4 groundExtent;
 };
 
 struct MaterialData {
@@ -15,6 +20,7 @@ struct MaterialData {
     int4 flags1;
     float4 uvLinear[5];
     float4 uvOffset[5];
+    float4 transmissionParams;
 };
 
 struct PushData {
@@ -63,6 +69,12 @@ Sampler2D brdfLut;
 [[vk::binding(10, 0)]]
 SamplerCube envMap;
 
+[[vk::binding(11, 0)]]
+Sampler2DShadow shadowMap;
+
+[[vk::binding(12, 0)]]
+Sampler2D sceneColorTex;
+
 struct VSInput {
     float3 pos      : POSITION;
     float3 color    : COLOR;
@@ -99,6 +111,31 @@ VSOutput vertexMain(VSInput input)
     float3 c2 = push.model[2].xyz;
     output.mirrored = dot(c0, cross(c1, c2)) < 0.0 ? -1.0 : 1.0;
     return output;
+}
+
+float shadowFactor(float3 worldPos, float3 geometricNormal)
+{
+    if (frame.shadowParams.z < 0.5)
+        return 1.0;
+
+    float3 p = worldPos + geometricNormal * frame.shadowParams.y;
+    float4 lightClip = mul(frame.lightViewProj, float4(p, 1.0));
+    float3 ndc = lightClip.xyz / lightClip.w;
+    float2 uv = ndc.xy * 0.5 + 0.5;
+
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || ndc.z < 0.0 || ndc.z > 1.0)
+        return 1.0;
+
+    float texel = frame.shadowParams.x;
+    float sum = 0.0;
+    for (int y = -1; y <= 1; y++)
+    {
+        for (int x = -1; x <= 1; x++)
+        {
+            sum += shadowMap.SampleCmpLevelZero(uv + float2(float(x), float(y)) * texel, ndc.z);
+        }
+    }
+    return sum / 9.0;
 }
 
 [shader("fragment")]
@@ -152,7 +189,7 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     roughness = clamp(pow(filteredAlpha2, 0.25), 0.045, 1.0);
 
     float3 V = normalize(frame.cameraPos.xyz - input.worldPos);
-    float3 L = normalize(float3(0.5, 1.0, 0.3));
+    float3 L = normalize(frame.lightDir.xyz);
     float3 H = normalize(V + L);
 
     float NdotL = saturate(dot(N, L));
@@ -175,8 +212,17 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     float3 kd = (1.0 - F) * (1.0 - metallic);
     float3 diffuse = kd * baseColor.rgb / PI;
 
+    float3 Ng = normalize(input.normal);
+    if (material.flags1.z != 0 && !frontFacing)
+        Ng = -Ng;
+
+    bool isGround = material.flags1.w == 1;
+    float shadow = shadowFactor(input.worldPos, Ng);
+
     float3 radiance = float3(3.0, 3.0, 3.0) * frame.iblParams.z;
-    float3 Lo = (diffuse + specular) * radiance * NdotL;
+    float3 diffuseLo = diffuse * radiance * NdotL * shadow;
+    float3 specularLo = specular * radiance * NdotL * shadow;
+    float3 Lo = diffuseLo + specularLo;
 
     float3 R = reflect(-V, N);
     R = normalize(lerp(R, N, roughness * roughness));
@@ -188,11 +234,41 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     float3 diffuseIBL = irradianceMap.SampleLevel(N, 0.0).rgb * baseColor.rgb
                         * saturate(1.0 - envBrdf) * (1.0 - metallic) * ao * frame.iblParams.y;
 
+    if (isGround)
+    {
+        float2 q = abs(input.worldPos.xz - frame.groundParams.xy) - frame.groundExtent.xy * 0.9;
+        float footprintDist = length(max(q, float2(0.0, 0.0))) + min(max(q.x, q.y), 0.0);
+        float contact = lerp(0.3, 1.0, smoothstep(0.0, frame.groundParams.w, footprintDist));
+        float groundShadow = lerp(1.0, shadow, 0.55);
+        diffuseIBL *= contact * groundShadow;
+        specularIBL *= contact * groundShadow;
+    }
+
     float3 emissive = material.emissiveFactor.rgb;
     if (material.flags1.x != 0)
         emissive *= emissiveTex.Sample(slotUV(input.texCoord, 4)).rgb;
 
-    float3 color = diffuseIBL + specularIBL + Lo + emissive;
+    float transmission = material.transmissionParams.x;
+    bool blendMode = material.flags1.y == 2 && transmission <= 0.0;
+    float alphaOut = blendMode ? saturate(baseColor.a) : 1.0;
+
+    float3 transmitted = float3(0.0, 0.0, 0.0);
+    if (transmission > 0.0)
+    {
+        float2 screenUV = input.pos.xy / frame.debugParams.zw;
+        float lod = roughness * frame.debugParams.y;
+        float3 sceneColor = sceneColorTex.SampleLevel(screenUV, lod).rgb;
+        transmitted = sceneColor * baseColor.rgb * transmission
+                        * saturate(1.0 - envBrdf) * (1.0 - metallic);
+        diffuseIBL *= (1.0 - transmission);
+        diffuseLo *= (1.0 - transmission);
+    }
+
+    float3 color;
+    if (blendMode)
+        color = (diffuseIBL + diffuseLo) * alphaOut + specularIBL + specularLo + emissive;
+    else
+        color = diffuseIBL + diffuseLo + specularIBL + specularLo + transmitted + emissive;
 
     if (debugView == 2) return float4(N * 0.5 + 0.5, 1.0);
     if (debugView == 3) return float4(ao, ao, ao, 1.0);
@@ -203,9 +279,18 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     if (debugView == 8) return float4(frontFacing ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0), 1.0);
     if (debugView == 9) return float4(normalize(input.normal) * 0.5 + 0.5, 1.0);
 
+    if (isGround)
+    {
+        float3 skyColor = envMap.SampleLevel(normalize(input.worldPos - frame.cameraPos.xyz), 0.0).rgb
+                            * frame.iblParams.y;
+        float fade = smoothstep(0.3 * frame.groundParams.z, 0.9 * frame.groundParams.z,
+                                length(input.worldPos.xz - frame.groundParams.xy));
+        color = lerp(color, skyColor, fade);
+    }
+
     color = min(color, float3(60.0, 60.0, 60.0));
 
-    return float4(color, 1.0);
+    return float4(color, alphaOut);
 }
 
 struct SkyOutput {

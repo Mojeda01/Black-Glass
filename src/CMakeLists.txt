@@ -53,6 +53,8 @@ add_library(alethia_v3 STATIC
     Vulkan/createTexture.cpp
     Vulkan/createIBL.cpp
     Vulkan/createHdr.cpp
+    Vulkan/createGround.cpp
+    Vulkan/createShadow.cpp
     Vulkan/loadGltf.cpp
     initVulkan.cpp
 )

@@ -36,8 +36,46 @@ void AlethiaV3::createHdrResources()
 
     M_HDRCOLOR = createImage(
         width, height, HDR_FORMAT, VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+
+    M_SCENECOPYMIPS = 1;
+    for (uint32_t largest = std::max(width, height); largest > 1; largest >>= 1)
+    {
+        M_SCENECOPYMIPS++;
+    }
+
+    M_SCENECOPY = createImage(
+        width, height, HDR_FORMAT, VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT, M_SCENECOPYMIPS);
+
+    {
+        VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+
+        VkImageMemoryBarrier2 barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        barrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+        barrier.srcAccessMask = VK_ACCESS_2_NONE;
+        barrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        barrier.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = M_SCENECOPY.image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.levelCount = M_SCENECOPYMIPS;
+        barrier.subresourceRange.layerCount = 1;
+
+        VkDependencyInfo dependencyInfo{};
+        dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dependencyInfo.imageMemoryBarrierCount = 1;
+        dependencyInfo.pImageMemoryBarriers = &barrier;
+        vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
+
+        endSingleTimeCommands(commandBuffer);
+    }
 
     if (M_MSAASAMPLES != VK_SAMPLE_COUNT_1_BIT)
     {
@@ -78,6 +116,7 @@ void AlethiaV3::destroyHdrResources()
     M_BLOOMIMAGES.clear();
     destroyImage(M_MSAACOLOR);
     destroyImage(M_HDRCOLOR);
+    destroyImage(M_SCENECOPY);
 }
 
 void AlethiaV3::createPostResources()
@@ -96,6 +135,13 @@ void AlethiaV3::createPostResources()
     if (vkCreateSampler(M_DEVICE, &samplerInfo, nullptr, &M_POSTSAMPLER) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create post-process sampler!");
+    }
+
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
+    if (vkCreateSampler(M_DEVICE, &samplerInfo, nullptr, &M_SCENESAMPLER) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create scene color sampler!");
     }
 
     VkDescriptorSetLayoutBinding bindings[2]{};

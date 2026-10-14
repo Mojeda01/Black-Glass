@@ -29,6 +29,9 @@ void AlethiaV3::initVulkan()
     std::cout << "→ createImageViews()\n";
     createImageViews();
     
+    std::cout << "→ createCommandPool()\n";
+    createCommandPool();
+
     std::cout << "→ pickMsaaSamples()\n";
     pickMsaaSamples();
 
@@ -38,11 +41,10 @@ void AlethiaV3::initVulkan()
     std::cout << "→ createHdrResources()\n";
     createHdrResources();
 
-    std::cout << "→ createCommandPool()\n";
-    createCommandPool();
-
     std::cout << "→ createTextureImage()\n";
     MeshData mesh = loadGltf(std::string(ALETHIA_V3_ASSET_DIR) + "/CarConcept.glb");
+    classifyPrimitives(mesh);
+    addGroundPlane(mesh);
     setGeometry(mesh.vertices, mesh.indices);
     setPrimitives(mesh.primitives);
 
@@ -79,4 +81,7 @@ void AlethiaV3::initVulkan()
 
     std::cout << "→ createPostResources()\n";
     createPostResources();
+
+    std::cout << "→ createShadowMap()\n";
+    createShadowMap();
 }

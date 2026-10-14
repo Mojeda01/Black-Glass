@@ -91,12 +91,22 @@ struct Vertex
 
 constexpr uint32_t MATERIAL_TEXTURE_SLOTS = 5;
 
+enum class RenderClass
+{
+    Opaque,
+    Transmissive,
+    Blend
+};
+
 struct Primitive
 {
     uint32_t firstIndex = 0;
     uint32_t indexCount = 0;
     int materialIndex = 0;
     glm::mat4 worldMatrix = glm::mat4(1.0f);
+    bool castsShadow = true;
+    RenderClass renderClass = RenderClass::Opaque;
+    glm::vec3 boundsCenter{ 0.0f };
 };
 
 struct ImageData
@@ -133,6 +143,7 @@ struct MaterialParams
         { 1.0f, 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }
     };
     glm::vec4 uvOffset[MATERIAL_TEXTURE_SLOTS] = {};
+    glm::vec4 transmissionParams{ 0.0f, 1.5f, 0.0f, 0.0f };
 };
 
 struct Material
@@ -162,9 +173,14 @@ struct UniformBufferObject
     glm::mat4 view;
     glm::mat4 proj;
     glm::mat4 invViewProj;
+    glm::mat4 lightViewProj;
     glm::vec4 cameraPos;
     glm::vec4 debugParams;
     glm::vec4 iblParams;
+    glm::vec4 lightDir;
+    glm::vec4 shadowParams;
+    glm::vec4 groundParams;
+    glm::vec4 groundExtent;
 };
 
 constexpr VkFormat HDR_FORMAT = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -174,7 +190,11 @@ constexpr uint32_t IBL_PREFILTER_SIZE = 256;
 constexpr uint32_t IBL_BRDF_SIZE = 256;
 constexpr uint32_t IBL_TEXTURE_BINDINGS = 4;
 constexpr uint32_t BLOOM_MAX_LEVELS = 6;
-constexpr uint32_t GRAPHICS_BINDING_COUNT = 2 + MATERIAL_TEXTURE_SLOTS + IBL_TEXTURE_BINDINGS;
+constexpr uint32_t SHADOW_BINDING_INDEX = 2 + MATERIAL_TEXTURE_SLOTS + IBL_TEXTURE_BINDINGS;
+constexpr uint32_t SCENE_COLOR_BINDING_INDEX = SHADOW_BINDING_INDEX + 1;
+constexpr uint32_t GRAPHICS_BINDING_COUNT = SCENE_COLOR_BINDING_INDEX + 1;
+constexpr uint32_t SHADOW_MAP_SIZE = 4096;
+constexpr VkFormat SHADOW_FORMAT = VK_FORMAT_D32_SFLOAT;
 
 // Number of frame the CPU is allowed to record ahead of the GPU.
 constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
@@ -264,12 +284,28 @@ private:
     AllocatedImage M_MSAACOLOR{};
     AllocatedImage M_HDRCOLOR{};
     std::vector<AllocatedImage> M_BLOOMIMAGES;
+    AllocatedImage M_SCENECOPY{};
+    uint32_t M_SCENECOPYMIPS = 1;
+    VkSampler M_SCENESAMPLER = VK_NULL_HANDLE;
     VkSampler M_POSTSAMPLER = VK_NULL_HANDLE;
     VkDescriptorSetLayout M_POSTDESCRIPTORLAYOUT = VK_NULL_HANDLE;
     VkPipelineLayout M_POSTPIPELINELAYOUT = VK_NULL_HANDLE;
     VkPipeline M_BLOOMDOWNPIPELINE = VK_NULL_HANDLE;
     VkPipeline M_BLOOMUPPIPELINE = VK_NULL_HANDLE;
     VkPipeline M_COMPOSITEPIPELINE = VK_NULL_HANDLE;
+
+    // SHADOWS
+    AllocatedImage M_SHADOWMAP{};
+    VkSampler M_SHADOWSAMPLER = VK_NULL_HANDLE;
+    VkPipelineLayout M_SHADOWPIPELINELAYOUT = VK_NULL_HANDLE;
+    VkPipeline M_SHADOWPIPELINE = VK_NULL_HANDLE;
+    glm::mat4 M_LIGHTVIEWPROJ{ 1.0f };
+    glm::vec3 M_LIGHTDIR{ 0.5f, 1.0f, 0.3f };
+    glm::vec3 M_SCENEMIN{ 0.0f };
+    glm::vec3 M_SCENEMAX{ 0.0f };
+    glm::vec4 M_GROUNDPARAMS{ 0.0f };
+    glm::vec4 M_GROUNDEXTENT{ 0.0f };
+    float M_SHADOWNORMALBIAS = 0.0f;
 
     // IBL
     AllocatedImage M_IBLENV{};
@@ -294,6 +330,8 @@ private:
     VkPipelineLayout M_PIPELINELAYOUT = VK_NULL_HANDLE;
     VkPipeline M_GRAPHICSPIPELINE = VK_NULL_HANDLE;
     VkPipeline M_SKYPIPELINE = VK_NULL_HANDLE;
+    VkPipeline M_TRANSMISSIONPIPELINE = VK_NULL_HANDLE;
+    VkPipeline M_BLENDPIPELINE = VK_NULL_HANDLE;
 
     // COMMANDS 
     VkCommandPool M_COMMANDPOOL = VK_NULL_HANDLE;
@@ -336,6 +374,9 @@ private:
     void destroyHdrResources();
     void createPostResources();
     void createIBL();
+    void classifyPrimitives(MeshData& mesh);
+    void addGroundPlane(MeshData& mesh);
+    void createShadowMap();
 
     // PIPELINE 
     void createPipelineLayout();

@@ -175,6 +175,30 @@ void AlethiaV3::createGraphicsPipeline()
         throw std::runtime_error("Failed to create sky pipeline!");
     }
 
+    pipelineInfo.pStages = shaderStages;
+    pipelineInfo.pVertexInputState = &vertexInputInfo;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+
+    if (vkCreateGraphicsPipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &M_TRANSMISSIONPIPELINE) != VK_SUCCESS)
+    {
+        vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
+        throw std::runtime_error("Failed to create transmission pipeline!");
+    }
+
+    colorBlendAttachment.blendEnable = VK_TRUE;
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+    if (vkCreateGraphicsPipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &M_BLENDPIPELINE) != VK_SUCCESS)
+    {
+        vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
+        throw std::runtime_error("Failed to create blend pipeline!");
+    }
+
     vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
 
     std::cout << "  [createGraphicsPipeline] SUCCESS - Graphics pipeline created. \n";

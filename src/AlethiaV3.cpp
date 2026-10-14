@@ -123,6 +123,20 @@ void AlethiaV3::cleanup()
     destroyBuffer(M_MATERIALBUFFER);
     destroyImage(M_FALLBACKTEXTURE);
 
+    destroyImage(M_SHADOWMAP);
+    if (M_SHADOWSAMPLER != VK_NULL_HANDLE)
+    {
+        vkDestroySampler(M_DEVICE, M_SHADOWSAMPLER, nullptr);
+    }
+    if (M_SHADOWPIPELINE != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(M_DEVICE, M_SHADOWPIPELINE, nullptr);
+    }
+    if (M_SHADOWPIPELINELAYOUT != VK_NULL_HANDLE)
+    {
+        vkDestroyPipelineLayout(M_DEVICE, M_SHADOWPIPELINELAYOUT, nullptr);
+    }
+
     destroyImage(M_IBLENV);
     destroyImage(M_IBLIRRADIANCE);
     destroyImage(M_IBLPREFILTER);
@@ -130,6 +144,10 @@ void AlethiaV3::cleanup()
     if (M_IBLSAMPLER != VK_NULL_HANDLE)
     {
         vkDestroySampler(M_DEVICE, M_IBLSAMPLER, nullptr);
+    }
+    if (M_SCENESAMPLER != VK_NULL_HANDLE)
+    {
+        vkDestroySampler(M_DEVICE, M_SCENESAMPLER, nullptr);
     }
     if (M_POSTSAMPLER != VK_NULL_HANDLE)
     {
@@ -158,7 +176,7 @@ void AlethiaV3::cleanup()
         std::cout << "  [cleanup] Sync Objects destroyed. \n";
     }
 
-    for (VkPipeline pipeline : { M_SKYPIPELINE, M_BLOOMDOWNPIPELINE, M_BLOOMUPPIPELINE, M_COMPOSITEPIPELINE })
+    for (VkPipeline pipeline : { M_SKYPIPELINE, M_TRANSMISSIONPIPELINE, M_BLENDPIPELINE, M_BLOOMDOWNPIPELINE, M_BLOOMUPPIPELINE, M_COMPOSITEPIPELINE })
     {
         if (pipeline != VK_NULL_HANDLE)
         {

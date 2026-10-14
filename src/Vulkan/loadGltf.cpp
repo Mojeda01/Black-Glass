@@ -465,6 +465,12 @@ MeshData AlethiaV3::loadGltf(const std::string& path)
         material.params.flags1 = glm::ivec4(material.textures[4] >= 0,
                                             m.alphaMode == "MASK" ? 1 : (m.alphaMode == "BLEND" ? 2 : 0),
                                             m.doubleSided ? 1 : 0, 0);
+        auto transmissionExt = m.extensions.find("KHR_materials_transmission");
+        if (transmissionExt != m.extensions.end() && transmissionExt->second.Has("transmissionFactor"))
+        {
+            material.params.transmissionParams.x = static_cast<float>(
+                transmissionExt->second.Get("transmissionFactor").GetNumberAsDouble());
+        }
         mesh.materials.push_back(material);
     }
 
