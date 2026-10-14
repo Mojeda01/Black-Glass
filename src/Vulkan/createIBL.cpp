@@ -164,9 +164,7 @@ void AlethiaV3::createIBL()
                     stagingSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-                void* mapped = nullptr;
-                vkMapMemory(M_DEVICE, equirectStaging.memory, 0, stagingSize, 0, &mapped);
-                uint16_t* halves = static_cast<uint16_t*>(mapped);
+                uint16_t* halves = static_cast<uint16_t*>(equirectStaging.mapped);
                 for (size_t i = 0; i < texelCount; i++)
                 {
                     float value = pixels[i];
@@ -174,7 +172,6 @@ void AlethiaV3::createIBL()
                     if (value > 65000.0f) value = 65000.0f;
                     halves[i] = glm::packHalf1x16(value);
                 }
-                vkUnmapMemory(M_DEVICE, equirectStaging.memory);
                 stbi_image_free(pixels);
 
                 equirect = createImage(

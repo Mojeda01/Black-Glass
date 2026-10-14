@@ -2,6 +2,7 @@
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+#include "vma/vk_mem_alloc.h"
 
 #include "Camera.h"
 
@@ -9,6 +10,7 @@
 #include <array>
 #include <string>
 #include <optional>
+#include <memory>
 
 
 // forward struct for query helper.
@@ -29,14 +31,15 @@ struct SwapchainSupportDetails{
 struct AllocatedBuffer 
 {
     VkBuffer buffer = VK_NULL_HANDLE;
-    VkDeviceMemory memory = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+    void* mapped = nullptr;
     VkDeviceSize size = 0;
 };
 
 struct AllocatedImage
 {
     VkImage image = VK_NULL_HANDLE;
-    VkDeviceMemory memory = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
     VkImageView view = VK_NULL_HANDLE;
     VkFormat format = VK_FORMAT_UNDEFINED;
 };
@@ -168,6 +171,31 @@ struct MeshData {
     std::vector<Material> materials;
 };
 
+struct Model
+{
+    std::string name;
+    std::string path;
+    bool visible = true;
+    bool isGround = false;
+    AllocatedBuffer vertexBuffer{};
+    AllocatedBuffer indexBuffer{};
+    std::vector<AllocatedImage> textureImages;
+    std::vector<VkSampler> samplers;
+    std::vector<GpuTexture> textures;
+    std::vector<Material> materials;
+    AllocatedBuffer materialBuffer{};
+    VkDeviceSize materialStride = 0;
+    std::vector<Primitive> primitives;
+    glm::vec3 localMin{ 0.0f };
+    glm::vec3 localMax{ 0.0f };
+    glm::vec3 position{ 0.0f };
+    float yawDegrees = 0.0f;
+    float scale = 1.0f;
+    glm::mat4 transform{ 1.0f };
+    glm::vec3 worldMin{ 0.0f };
+    glm::vec3 worldMax{ 0.0f };
+};
+
 struct UniformBufferObject 
 {
     glm::mat4 view;
@@ -181,6 +209,7 @@ struct UniformBufferObject
     glm::vec4 shadowParams;
     glm::vec4 groundParams;
     glm::vec4 groundExtent;
+    glm::vec4 groundBoxes[8];
 };
 
 constexpr VkFormat HDR_FORMAT = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -193,6 +222,7 @@ constexpr uint32_t BLOOM_MAX_LEVELS = 6;
 constexpr uint32_t SHADOW_BINDING_INDEX = 2 + MATERIAL_TEXTURE_SLOTS + IBL_TEXTURE_BINDINGS;
 constexpr uint32_t SCENE_COLOR_BINDING_INDEX = SHADOW_BINDING_INDEX + 1;
 constexpr uint32_t GRAPHICS_BINDING_COUNT = SCENE_COLOR_BINDING_INDEX + 1;
+constexpr uint32_t GROUND_BOX_MAX = 8;
 constexpr uint32_t SHADOW_MAP_SIZE = 4096;
 constexpr VkFormat SHADOW_FORMAT = VK_FORMAT_D32_SFLOAT;
 
@@ -243,6 +273,11 @@ public:
     bool mouseCaptured() const { return m_mouseCaptured; }
     void adjustExposure(float stops);
     void toggleBloom();
+    void initImGui();
+    bool uiWantsMouse() const;
+    bool uiWantsKeyboard() const;
+    void toggleMouseCapture();
+    void toggleUi();
     Camera& camera() { return m_camera; }
 private:
     GLFWwindow* m_window = nullptr;
@@ -252,6 +287,16 @@ private:
     bool m_firstMouse = true;
     bool m_mouseCaptured = false;
     int m_debugView = 0;
+    float m_fov = 45.0f;
+    float m_sunIntensity = 3.0f;
+    float m_sunAzimuth = 0.0f;
+    float m_sunElevation = 60.0f;
+    float m_envIntensity = 1.0f;
+    bool m_shadowsEnabled = true;
+    bool m_shadowDirty = false;
+    bool m_imguiReady = false;
+    bool m_showUi = true;
+    VkFormat m_uiColorFormat = VK_FORMAT_UNDEFINED;
     float m_exposure = 1.0f;
     float m_bloomStrength = 0.04f;
     bool m_bloomEnabled = true;
@@ -267,6 +312,7 @@ private:
     VkDevice M_DEVICE = VK_NULL_HANDLE;
     VkQueue M_GRAPHICSQUEUE = VK_NULL_HANDLE;
     VkQueue M_PRESENTQUEUE = VK_NULL_HANDLE;
+    VmaAllocator M_ALLOCATOR = VK_NULL_HANDLE;
     VkSurfaceKHR M_SURFACE = VK_NULL_HANDLE;
 
     // SWAPCHAIN
@@ -305,6 +351,7 @@ private:
     glm::vec3 M_SCENEMAX{ 0.0f };
     glm::vec4 M_GROUNDPARAMS{ 0.0f };
     glm::vec4 M_GROUNDEXTENT{ 0.0f };
+    std::array<glm::vec4, GROUND_BOX_MAX> M_GROUNDBOXES{};
     float M_SHADOWNORMALBIAS = 0.0f;
 
     // IBL
@@ -317,13 +364,7 @@ private:
     bool M_IBLFROMFILE = false;
     
     // TEXTURE
-    std::vector<AllocatedImage> M_TEXTUREIMAGES;
     AllocatedImage M_FALLBACKTEXTURE{};
-    std::vector<VkSampler> M_SAMPLERS;
-    std::vector<GpuTexture> M_TEXTURES;
-    std::vector<Material> M_MATERIALS;
-    AllocatedBuffer M_MATERIALBUFFER{};
-    VkDeviceSize M_MATERIALSTRIDE = 0;
     VkSampler M_TEXTURESAMPLER = VK_NULL_HANDLE;
 
     // PIPELINE 
@@ -338,10 +379,10 @@ private:
     std::vector<VkCommandBuffer> M_COMMANDBUFFERS;
 
     // GEOMETRY
-    AllocatedBuffer M_VERTEXBUFFER{};
-    AllocatedBuffer M_INDEXBUFFER{};
-    uint32_t M_INDEXCOUNT = 0;
-    std::vector<Primitive> M_PRIMITIVES;
+    std::vector<std::unique_ptr<Model>> M_MODELS;
+    std::unique_ptr<Model> M_GROUND;
+    std::string m_loadError;
+    char m_modelPathInput[512] = {};
     
     // UNIFORMS
     std::vector<AllocatedBuffer> M_UNIFORMBUFFERS;
@@ -375,24 +416,32 @@ private:
     void createPostResources();
     void createIBL();
     void classifyPrimitives(MeshData& mesh);
-    void addGroundPlane(MeshData& mesh);
+    bool loadModel(const std::string& path);
+    void removeModel(size_t index);
+    void destroyModel(Model& model);
+    void updateModelTransform(Model& model);
+    void placeNewModel(Model& model);
+    void createGroundModel();
+    void refreshScene();
+    void frameScene();
     void createShadowMap();
+    void bakeShadowMap();
+    void beginUiFrame();
+    void buildUi();
+    void shutdownImGui();
 
     // PIPELINE 
     void createPipelineLayout();
     void createGraphicsPipeline();
-    void createVertexBuffer();
-    void setGeometry(const std::vector<Vertex>& verts,
-                        const std::vector<uint32_t>& idx);
-    void setPrimitives(const std::vector<Primitive>& prims);
-    void createIndexBuffer();
+    void uploadModelGeometry(Model& model, const MeshData& mesh);
     void createDescriptorSetLayout();
     void createUniformBuffers();
     void updateUniformBuffer(uint32_t currentImage);
     AllocatedImage createTextureFromPixels(const unsigned char* pixels, int width, int height,
                                             VkFormat format);
-    void createTextures(const MeshData& mesh);
-    void createMaterialBuffer();
+    void createFallbackTexture();
+    void createModelTextures(Model& model, const MeshData& mesh);
+    void createModelMaterialBuffer(Model& model);
     VkSampler createSamplerObject(const SamplerData& data);
     MeshData loadGltf(const std::string& path);
     void createTextureSampler();
@@ -412,7 +461,8 @@ private:
     SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device);
 
     // MEMORY
-    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+    void createAllocator();
+    void destroyAllocator();
     VkFormat findDepthFormat();
     AllocatedImage createImage( uint32_t width, uint32_t height, VkFormat format,
                                 VkImageTiling tiling, VkImageUsageFlags usage,

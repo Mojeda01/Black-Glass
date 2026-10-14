@@ -23,6 +23,9 @@ void AlethiaV3::initVulkan()
     std::cout << "→ createLogicalDevice()\n";
     createLogicalDevice();
 
+    std::cout << "→ createAllocator()\n";
+    createAllocator();
+
     std::cout << "→ createSwapchain()\n";
     createSwapchain();
 
@@ -41,22 +44,19 @@ void AlethiaV3::initVulkan()
     std::cout << "→ createHdrResources()\n";
     createHdrResources();
 
-    std::cout << "→ createTextureImage()\n";
-    MeshData mesh = loadGltf(std::string(ALETHIA_V3_ASSET_DIR) + "/CarConcept.glb");
-    classifyPrimitives(mesh);
-    addGroundPlane(mesh);
-    setGeometry(mesh.vertices, mesh.indices);
-    setPrimitives(mesh.primitives);
-
     std::cout << "→ createTextureSampler()\n";
     createTextureSampler();
-    createTextures(mesh);
+    createFallbackTexture();
 
-    std::cout << "→ createVertexBuffer()\n";
-    createVertexBuffer();
+    std::cout << "→ createGroundModel()\n";
+    createGroundModel();
 
-    std::cout << "→ createIndexBuffer()\n";
-    createIndexBuffer();
+    std::cout << "→ loadModel()\n";
+    if (!loadModel(std::string(ALETHIA_V3_ASSET_DIR) + "/CarConcept.glb"))
+    {
+        throw std::runtime_error("Failed to load the default model: " + m_loadError);
+    }
+    frameScene();
 
     std::cout << "→ createDescriptorSetLayout()\n";
     createDescriptorSetLayout();
@@ -83,5 +83,7 @@ void AlethiaV3::initVulkan()
     createPostResources();
 
     std::cout << "→ createShadowMap()\n";
+    refreshScene();
     createShadowMap();
+    m_shadowDirty = false;
 }

@@ -84,8 +84,7 @@ void AlethiaV3::createUniformBuffers()
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
         );
 
-        vkMapMemory(M_DEVICE, M_UNIFORMBUFFERS[i].memory, 0, bufferSize, 0,
-                        &M_UNIFORMBUFFERSMAPPED[i]);
+        M_UNIFORMBUFFERSMAPPED[i] = M_UNIFORMBUFFERS[i].mapped;
     }
     std::cout << "  [createUniformBuffers] SUCCESS - " << MAX_FRAMES_IN_FLIGHT
                     << " uniform buffers mapped.\n";
@@ -142,7 +141,7 @@ void AlethiaV3::updateUniformBuffer(uint32_t currentImage)
 
     ubo.view = m_camera.view();
 
-    ubo.proj = glm::perspective(glm::radians(45.0f),
+    ubo.proj = glm::perspective(glm::radians(m_fov),
                                 M_SWAPCHAINEXTENT.width / static_cast<float>(M_SWAPCHAINEXTENT.height),
                                 0.1f, 1000.0f);
 
@@ -151,17 +150,21 @@ void AlethiaV3::updateUniformBuffer(uint32_t currentImage)
     ubo.invViewProj = glm::inverse(ubo.proj * ubo.view);
 
     ubo.lightViewProj = M_LIGHTVIEWPROJ;
-    ubo.lightDir = glm::vec4(glm::normalize(M_LIGHTDIR), 0.0f);
-    ubo.shadowParams = glm::vec4(1.0f / static_cast<float>(SHADOW_MAP_SIZE), M_SHADOWNORMALBIAS, 1.0f, 0.0f);
+    ubo.lightDir = glm::vec4(glm::normalize(M_LIGHTDIR), m_sunIntensity);
+    ubo.shadowParams = glm::vec4(1.0f / static_cast<float>(SHADOW_MAP_SIZE), M_SHADOWNORMALBIAS, m_shadowsEnabled ? 1.0f : 0.0f, 0.0f);
     ubo.groundParams = M_GROUNDPARAMS;
     ubo.groundExtent = M_GROUNDEXTENT;
+    for (uint32_t i = 0; i < GROUND_BOX_MAX; i++)
+    {
+        ubo.groundBoxes[i] = M_GROUNDBOXES[i];
+    }
 
     ubo.cameraPos = glm::vec4(m_camera.position, 1.0f);
     ubo.debugParams = glm::vec4(static_cast<float>(m_debugView),
                                 static_cast<float>(M_SCENECOPYMIPS - 1),
                                 static_cast<float>(M_SWAPCHAINEXTENT.width),
                                 static_cast<float>(M_SWAPCHAINEXTENT.height));
-    ubo.iblParams = glm::vec4(M_IBLMAXMIP, 1.0f, M_IBLFROMFILE ? 0.0f : 1.0f, 0.0f);
+    ubo.iblParams = glm::vec4(M_IBLMAXMIP, m_envIntensity, M_IBLFROMFILE ? 0.0f : 1.0f, 0.0f);
 
     std::memcpy(M_UNIFORMBUFFERSMAPPED[currentImage], &ubo, sizeof(ubo));
 }

@@ -10,6 +10,7 @@ struct FrameData {
     float4 shadowParams;
     float4 groundParams;
     float4 groundExtent;
+    float4 groundBoxes[8];
 };
 
 struct MaterialData {
@@ -219,7 +220,7 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     bool isGround = material.flags1.w == 1;
     float shadow = shadowFactor(input.worldPos, Ng);
 
-    float3 radiance = float3(3.0, 3.0, 3.0) * frame.iblParams.z;
+    float3 radiance = float3(1.0, 1.0, 1.0) * frame.lightDir.w * frame.iblParams.z;
     float3 diffuseLo = diffuse * radiance * NdotL * shadow;
     float3 specularLo = specular * radiance * NdotL * shadow;
     float3 Lo = diffuseLo + specularLo;
@@ -236,8 +237,15 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
 
     if (isGround)
     {
-        float2 q = abs(input.worldPos.xz - frame.groundParams.xy) - frame.groundExtent.xy * 0.9;
-        float footprintDist = length(max(q, float2(0.0, 0.0))) + min(max(q.x, q.y), 0.0);
+        float footprintDist = 1000000.0;
+        int boxCount = int(frame.groundExtent.x + 0.5);
+        for (int i = 0; i < boxCount; i++)
+        {
+            float4 box = frame.groundBoxes[i];
+            float2 q = abs(input.worldPos.xz - box.xy) - box.zw * 0.9;
+            float d = length(max(q, float2(0.0, 0.0))) + min(max(q.x, q.y), 0.0);
+            footprintDist = min(footprintDist, d);
+        }
         float contact = lerp(0.3, 1.0, smoothstep(0.0, frame.groundParams.w, footprintDist));
         float groundShadow = lerp(1.0, shadow, 0.55);
         diffuseIBL *= contact * groundShadow;

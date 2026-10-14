@@ -71,8 +71,6 @@ void initv3() {
                 if (r) r->setFramebufferResized();
             });
         
-        renderer.setMouseCaptured(glfwGetWindowAttrib(window.get(), GLFW_FOCUSED) == GLFW_TRUE);
-
         glfwSetWindowFocusCallback(window.get(),
                 [](GLFWwindow* w, int focused) {
                     auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
@@ -82,7 +80,8 @@ void initv3() {
         glfwSetMouseButtonCallback(window.get(),
                 [](GLFWwindow* w, int button, int action, int) {
                     auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
-                    if (r && button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS && !r->mouseCaptured())
+                    if (r && button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS
+                        && !r->mouseCaptured() && !r->uiWantsMouse())
                     {
                         r->setMouseCaptured(true);
                     }
@@ -102,6 +101,20 @@ void initv3() {
                     }
 
                     auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
+                    if (r && action == GLFW_PRESS && key == GLFW_KEY_TAB)
+                    {
+                        r->toggleMouseCapture();
+                        return;
+                    }
+                    if (r && action == GLFW_PRESS && key == GLFW_KEY_F1)
+                    {
+                        r->toggleUi();
+                        return;
+                    }
+                    if (r && r->uiWantsKeyboard())
+                    {
+                        return;
+                    }
                     if (r && action == GLFW_PRESS && key >= GLFW_KEY_0 && key <= GLFW_KEY_9)
                     {
                         r->setDebugView(key - GLFW_KEY_0);
@@ -116,6 +129,8 @@ void initv3() {
                         r->toggleBloom();
                     }
                  });
+
+        renderer.initImGui();
 
         while (!window.shouldClose()) {
             window.pollEvents();

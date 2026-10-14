@@ -1,82 +1,38 @@
-
 #include "../AlethiaV3.h"
 #include <iostream>
 #include <cstring>
 #include <vector>
 
-
-namespace 
+void AlethiaV3::uploadModelGeometry(Model& model, const MeshData& mesh)
 {
-    std::vector<Vertex> VERTICES;
-    std::vector<uint32_t> INDICES;
-} // namespace
+    auto upload = [&](const void* data, VkDeviceSize size, VkBufferUsageFlags usage) -> AllocatedBuffer
+    {
+        AllocatedBuffer staging = createBuffer(
+            size,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+        );
+        std::memcpy(staging.mapped, data, static_cast<size_t>(size));
 
-void AlethiaV3::setGeometry(    const std::vector<Vertex>& verts,
-                                const std::vector<uint32_t>& idx)
-{
-    VERTICES = verts;
-    INDICES = idx;
-}
+        AllocatedBuffer device = createBuffer(
+            size,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+        );
 
-void AlethiaV3::setPrimitives(const std::vector<Primitive>& prims)
-{
-    M_PRIMITIVES = prims;
-}
+        copyBuffer(staging.buffer, device.buffer, size);
+        destroyBuffer(staging);
+        return device;
+    };
 
-void AlethiaV3::createVertexBuffer()
-{
-    std::cout << "  [createVertexBuffer] Starting ... \n";
-    VkDeviceSize bufferSize = sizeof(VERTICES[0]) * VERTICES.size();
+    model.vertexBuffer = upload(mesh.vertices.data(),
+                                sizeof(Vertex) * mesh.vertices.size(),
+                                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    model.indexBuffer = upload(mesh.indices.data(),
+                               sizeof(uint32_t) * mesh.indices.size(),
+                               VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    model.primitives = mesh.primitives;
 
-    AllocatedBuffer staging = createBuffer(
-        bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-    );
-
-    void *data;
-    vkMapMemory(M_DEVICE, staging.memory, 0, bufferSize, 0, &data);
-    std::memcpy(data, VERTICES.data(), static_cast<size_t>(bufferSize));
-    vkUnmapMemory(M_DEVICE, staging.memory);
-
-    M_VERTEXBUFFER = createBuffer(
-        bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-    );
-
-    copyBuffer(staging.buffer, M_VERTEXBUFFER.buffer, bufferSize);
-    destroyBuffer(staging);
-
-    std::cout << "  [createVertexBuffer] SUCCESS - " << VERTICES.size() << " vertices uploaded.\n";
-}
-
-void AlethiaV3::createIndexBuffer()
-{
-    std::cout << "  [createIndexBuffer] Starting ... \n";
-
-    VkDeviceSize bufferSize = sizeof(INDICES[0]) * INDICES.size();
-    M_INDEXCOUNT = static_cast<uint32_t>(INDICES.size());
-
-    AllocatedBuffer staging = createBuffer(
-        bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-    );
-
-    void* data;
-    vkMapMemory(M_DEVICE, staging.memory, 0, bufferSize, 0, &data);
-    std::memcpy(data, INDICES.data(), static_cast<size_t>(bufferSize));
-    vkUnmapMemory(M_DEVICE, staging.memory);
-
-    M_INDEXBUFFER = createBuffer(
-        bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-    );
-
-    copyBuffer(staging.buffer, M_INDEXBUFFER.buffer, bufferSize);
-    destroyBuffer(staging);
-
-    std::cout << "  [createIndexBuffer] SUCCESS - " << M_INDEXCOUNT << " indices uploaded.\n";
+    std::cout << "  [uploadModelGeometry] SUCCESS - " << mesh.vertices.size() << " vertices, "
+              << mesh.indices.size() << " indices uploaded.\n";
 }

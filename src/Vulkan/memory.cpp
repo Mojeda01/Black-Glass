@@ -2,23 +2,31 @@
 #include <iostream>
 #include <stdexcept>
 
-uint32_t AlethiaV3::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+void AlethiaV3::createAllocator()
 {
-    VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(M_PHYSICALDEVICE, &memProperties);
+    VmaAllocatorCreateInfo allocatorInfo{};
+    allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT |
+                          VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+    allocatorInfo.instance = M_INSTANCE;
+    allocatorInfo.physicalDevice = M_PHYSICALDEVICE;
+    allocatorInfo.device = M_DEVICE;
 
-    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+    if (vmaCreateAllocator(&allocatorInfo, &M_ALLOCATOR) != VK_SUCCESS)
     {
-        const bool typeAllowed = (typeFilter & (1u << i)) != 0;
-        const bool hasProperties = 
-            (memProperties.memoryTypes[i].propertyFlags & properties) == properties;
-
-        if (typeAllowed && hasProperties)
-        {
-            return i;
-        }
+        throw std::runtime_error("Failed to create VMA allocator!");
     }
-    throw std::runtime_error("Failed to find a suitable memory type!");
+
+    std::cout << "  [createAllocator] SUCCESS - VMA allocator created.\n";
+}
+
+void AlethiaV3::destroyAllocator()
+{
+    if (M_ALLOCATOR != VK_NULL_HANDLE)
+    {
+        vmaDestroyAllocator(M_ALLOCATOR);
+        M_ALLOCATOR = VK_NULL_HANDLE;
+    }
 }
 
 AllocatedBuffer AlethiaV3::createBuffer(    VkDeviceSize size,
@@ -34,34 +42,23 @@ AllocatedBuffer AlethiaV3::createBuffer(    VkDeviceSize size,
     bufferInfo.usage = usage;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    if (vkCreateBuffer(M_DEVICE, &bufferInfo, nullptr, &result.buffer) != VK_SUCCESS)
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    allocInfo.requiredFlags = properties;
+    if (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+    {
+        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                          VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    }
+
+    VmaAllocationInfo resultInfo{};
+    if (vmaCreateBuffer(M_ALLOCATOR, &bufferInfo, &allocInfo,
+                        &result.buffer, &result.allocation, &resultInfo) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create buffer!");
     }
 
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(M_DEVICE, result.buffer, &memRequirements);
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
-
-    VkMemoryAllocateFlagsInfo flagsInfo{};
-    if (usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
-    {
-        flagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
-        flagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
-        allocInfo.pNext = &flagsInfo;
-    }
-
-    if (vkAllocateMemory(M_DEVICE, &allocInfo, nullptr, &result.memory) != VK_SUCCESS)
-    {
-        vkDestroyBuffer(M_DEVICE, result.buffer, nullptr);
-        throw std::runtime_error("Failed to allocate buffer memory!");
-    }
-
-    vkBindBufferMemory(M_DEVICE, result.buffer, result.memory, 0);
+    result.mapped = resultInfo.pMappedData;
     return result;
 }
 
@@ -69,15 +66,11 @@ void AlethiaV3::destroyBuffer(AllocatedBuffer& buffer)
 {
     if (buffer.buffer != VK_NULL_HANDLE)
     {
-        vkDestroyBuffer(M_DEVICE, buffer.buffer, nullptr);
+        vmaDestroyBuffer(M_ALLOCATOR, buffer.buffer, buffer.allocation);
         buffer.buffer = VK_NULL_HANDLE;
+        buffer.allocation = VK_NULL_HANDLE;
     }
-
-    if (buffer.memory != VK_NULL_HANDLE)
-    {
-        vkFreeMemory(M_DEVICE, buffer.memory, nullptr);
-        buffer.memory = VK_NULL_HANDLE;
-    }
+    buffer.mapped = nullptr;
     buffer.size = 0;
 }
 
@@ -155,26 +148,19 @@ AllocatedImage AlethiaV3::createImage(  uint32_t width, uint32_t height, VkForma
     imageInfo.samples = samples;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    if (vkCreateImage(M_DEVICE, &imageInfo, nullptr, &result.image) != VK_SUCCESS)
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    allocInfo.requiredFlags = properties;
+    if (usage & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT))
+    {
+        allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+    }
+
+    if (vmaCreateImage(M_ALLOCATOR, &imageInfo, &allocInfo,
+                        &result.image, &result.allocation, nullptr) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create image!");
     }
-
-    VkMemoryRequirements memRequirements;
-    vkGetImageMemoryRequirements(M_DEVICE, result.image, &memRequirements);
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
-
-    if (vkAllocateMemory(M_DEVICE, &allocInfo, nullptr, &result.memory) != VK_SUCCESS)
-    {
-        vkDestroyImage(M_DEVICE, result.image, nullptr);
-        throw std::runtime_error("Failed to allocate image memory!");
-    }
-
-    vkBindImageMemory(M_DEVICE, result.image, result.memory, 0);
 
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -189,8 +175,7 @@ AllocatedImage AlethiaV3::createImage(  uint32_t width, uint32_t height, VkForma
 
     if (vkCreateImageView(M_DEVICE, &viewInfo, nullptr, &result.view) != VK_SUCCESS)
     {
-        vkFreeMemory(M_DEVICE, result.memory, nullptr);
-        vkDestroyImage(M_DEVICE, result.image, nullptr);
+        vmaDestroyImage(M_ALLOCATOR, result.image, result.allocation);
         throw std::runtime_error("Failed to create image view!");
     }
 
@@ -207,14 +192,9 @@ void AlethiaV3::destroyImage(AllocatedImage& image)
 
    if (image.image != VK_NULL_HANDLE)
    {
-        vkDestroyImage(M_DEVICE, image.image, nullptr);
+        vmaDestroyImage(M_ALLOCATOR, image.image, image.allocation);
         image.image = VK_NULL_HANDLE;
-   }
-
-   if (image.memory != VK_NULL_HANDLE)
-   {
-        vkFreeMemory(M_DEVICE, image.memory, nullptr);
-        image.memory = VK_NULL_HANDLE;
+        image.allocation = VK_NULL_HANDLE;
    }
 
    image.format = VK_FORMAT_UNDEFINED;

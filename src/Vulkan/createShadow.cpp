@@ -84,16 +84,6 @@ void AlethiaV3::createShadowMap()
         throw std::runtime_error("Failed to create shadow sampler!");
     }
 
-    glm::vec3 center = (M_SCENEMIN + M_SCENEMAX) * 0.5f;
-    float radius = std::max(0.5f * glm::length(M_SCENEMAX - M_SCENEMIN), 0.01f);
-    glm::vec3 lightDir = glm::normalize(M_LIGHTDIR);
-    glm::vec3 up = std::abs(lightDir.y) > 0.99f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
-
-    glm::mat4 lightView = glm::lookAt(center + lightDir * radius * 2.0f, center, up);
-    glm::mat4 lightProj = glm::ortho(-radius, radius, -radius, radius, 0.0f, radius * 4.0f);
-    M_LIGHTVIEWPROJ = lightProj * lightView;
-    M_SHADOWNORMALBIAS = 2.0f * (2.0f * radius / static_cast<float>(SHADOW_MAP_SIZE));
-
     VkPushConstantRange pushRange{};
     pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     pushRange.offset = 0;
@@ -195,6 +185,21 @@ void AlethiaV3::createShadowMap()
     }
     vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
 
+    bakeShadowMap();
+}
+
+void AlethiaV3::bakeShadowMap()
+{
+    glm::vec3 center = (M_SCENEMIN + M_SCENEMAX) * 0.5f;
+    float radius = std::max(0.5f * glm::length(M_SCENEMAX - M_SCENEMIN), 0.01f);
+    glm::vec3 lightDir = glm::normalize(M_LIGHTDIR);
+    glm::vec3 up = std::abs(lightDir.y) > 0.99f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+
+    glm::mat4 lightView = glm::lookAt(center + lightDir * radius * 2.0f, center, up);
+    glm::mat4 lightProj = glm::ortho(-radius, radius, -radius, radius, 0.0f, radius * 4.0f);
+    M_LIGHTVIEWPROJ = lightProj * lightView;
+    M_SHADOWNORMALBIAS = 2.0f * (2.0f * radius / static_cast<float>(SHADOW_MAP_SIZE));
+
     VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
     depthBarrier(commandBuffer, M_SHADOWMAP.image,
@@ -230,24 +235,32 @@ void AlethiaV3::createShadowMap()
     scissor.extent = { SHADOW_MAP_SIZE, SHADOW_MAP_SIZE };
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    VkBuffer vertexBuffers[] = { M_VERTEXBUFFER.buffer };
-    VkDeviceSize offsets[] = { 0 };
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, M_INDEXBUFFER.buffer, 0, VK_INDEX_TYPE_UINT32);
-
     uint32_t drawn = 0;
-    for (const Primitive& prim : M_PRIMITIVES)
+    for (const auto& model : M_MODELS)
     {
-        if (!prim.castsShadow)
+        if (!model->visible)
         {
             continue;
         }
 
-        ShadowPush push{ prim.worldMatrix, M_LIGHTVIEWPROJ };
-        vkCmdPushConstants(commandBuffer, M_SHADOWPIPELINELAYOUT, VK_SHADER_STAGE_VERTEX_BIT,
-                            0, sizeof(ShadowPush), &push);
-        vkCmdDrawIndexed(commandBuffer, prim.indexCount, 1, prim.firstIndex, 0, 0);
-        drawn++;
+        VkBuffer vertexBuffers[] = { model->vertexBuffer.buffer };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+        vkCmdBindIndexBuffer(commandBuffer, model->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+        for (const Primitive& prim : model->primitives)
+        {
+            if (!prim.castsShadow)
+            {
+                continue;
+            }
+
+            ShadowPush push{ model->transform * prim.worldMatrix, M_LIGHTVIEWPROJ };
+            vkCmdPushConstants(commandBuffer, M_SHADOWPIPELINELAYOUT, VK_SHADER_STAGE_VERTEX_BIT,
+                                0, sizeof(ShadowPush), &push);
+            vkCmdDrawIndexed(commandBuffer, prim.indexCount, 1, prim.firstIndex, 0, 0);
+            drawn++;
+        }
     }
 
     vkCmdEndRendering(commandBuffer);
@@ -259,6 +272,6 @@ void AlethiaV3::createShadowMap()
 
     endSingleTimeCommands(commandBuffer);
 
-    std::cout << "  [createShadowMap] SUCCESS - " << SHADOW_MAP_SIZE << "x" << SHADOW_MAP_SIZE
+    std::cout << "  [bakeShadowMap] " << SHADOW_MAP_SIZE << "x" << SHADOW_MAP_SIZE
               << " shadow map baked from " << drawn << " primitives.\n";
 }

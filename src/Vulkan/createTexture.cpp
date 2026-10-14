@@ -143,10 +143,7 @@ AllocatedImage AlethiaV3::createTextureFromPixels(const unsigned char* pixels,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
     );
 
-    void* data;
-    vkMapMemory(M_DEVICE, staging.memory, 0, imageSize, 0, &data);
-    std::memcpy(data, pixels, static_cast<size_t>(imageSize));
-    vkUnmapMemory(M_DEVICE, staging.memory);
+    std::memcpy(staging.mapped, pixels, static_cast<size_t>(imageSize));
 
     AllocatedImage texture = createImage(
         static_cast<uint32_t>(texWidth),
@@ -234,19 +231,22 @@ AllocatedImage AlethiaV3::createTextureFromPixels(const unsigned char* pixels,
     return texture;
 }
 
-void AlethiaV3::createTextures(const MeshData& mesh)
+void AlethiaV3::createFallbackTexture()
 {
     const unsigned char white[4] = { 255, 255, 255, 255 };
     M_FALLBACKTEXTURE = createTextureFromPixels(white, 1, 1, VK_FORMAT_R8G8B8A8_UNORM);
+}
 
+void AlethiaV3::createModelTextures(Model& model, const MeshData& mesh)
+{
     for (const SamplerData& data : mesh.samplers)
     {
-        M_SAMPLERS.push_back(createSamplerObject(data));
+        model.samplers.push_back(createSamplerObject(data));
     }
 
     std::map<std::pair<int, bool>, size_t> imageLookup;
-    M_TEXTUREIMAGES.reserve(mesh.textures.size());
-    M_TEXTURES.reserve(mesh.textures.size());
+    model.textureImages.reserve(mesh.textures.size());
+    model.textures.reserve(mesh.textures.size());
 
     for (const TextureData& texture : mesh.textures)
     {
@@ -255,49 +255,47 @@ void AlethiaV3::createTextures(const MeshData& mesh)
         if (found == imageLookup.end())
         {
             const ImageData& image = mesh.images[texture.image];
-            M_TEXTUREIMAGES.push_back(createTextureFromPixels(
+            model.textureImages.push_back(createTextureFromPixels(
                 image.pixels.data(), image.width, image.height,
                 texture.srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM));
-            found = imageLookup.emplace(key, M_TEXTUREIMAGES.size() - 1).first;
+            found = imageLookup.emplace(key, model.textureImages.size() - 1).first;
         }
 
         GpuTexture gpu{};
-        gpu.view = M_TEXTUREIMAGES[found->second].view;
-        gpu.sampler = texture.sampler >= 0 ? M_SAMPLERS[texture.sampler] : M_TEXTURESAMPLER;
-        M_TEXTURES.push_back(gpu);
+        gpu.view = model.textureImages[found->second].view;
+        gpu.sampler = texture.sampler >= 0 ? model.samplers[texture.sampler] : M_TEXTURESAMPLER;
+        model.textures.push_back(gpu);
     }
 
-    M_MATERIALS = mesh.materials;
-    createMaterialBuffer();
+    model.materials = mesh.materials;
+    createModelMaterialBuffer(model);
 }
 
-void AlethiaV3::createMaterialBuffer()
+void AlethiaV3::createModelMaterialBuffer(Model& model)
 {
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(M_PHYSICALDEVICE, &properties);
 
     VkDeviceSize alignment = properties.limits.minUniformBufferOffsetAlignment;
     if (alignment == 0) alignment = 1;
-    M_MATERIALSTRIDE = (sizeof(MaterialParams) + alignment - 1) / alignment * alignment;
+    model.materialStride = (sizeof(MaterialParams) + alignment - 1) / alignment * alignment;
 
-    VkDeviceSize bufferSize = M_MATERIALSTRIDE * M_MATERIALS.size();
-    M_MATERIALBUFFER = createBuffer(
+    VkDeviceSize bufferSize = model.materialStride * model.materials.size();
+    model.materialBuffer = createBuffer(
         bufferSize,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
     );
 
-    void* data = nullptr;
-    vkMapMemory(M_DEVICE, M_MATERIALBUFFER.memory, 0, bufferSize, 0, &data);
+    void* data = model.materialBuffer.mapped;
     std::memset(data, 0, static_cast<size_t>(bufferSize));
-    for (size_t i = 0; i < M_MATERIALS.size(); i++)
+    for (size_t i = 0; i < model.materials.size(); i++)
     {
-        std::memcpy(static_cast<char*>(data) + i * M_MATERIALSTRIDE,
-                    &M_MATERIALS[i].params, sizeof(MaterialParams));
+        std::memcpy(static_cast<char*>(data) + i * model.materialStride,
+                    &model.materials[i].params, sizeof(MaterialParams));
     }
-    vkUnmapMemory(M_DEVICE, M_MATERIALBUFFER.memory);
 
-    std::cout << "  [createMaterialBuffer] SUCCESS - " << M_MATERIALS.size()
+    std::cout << "  [createModelMaterialBuffer] SUCCESS - " << model.materials.size()
                 << " materials uploaded.\n";
 }
 

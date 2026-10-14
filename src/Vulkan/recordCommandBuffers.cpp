@@ -2,6 +2,8 @@
 #include <iostream>
 #include <stdexcept>
 #include <array>
+#include "../imgui/imgui.h"
+#include "../imgui/imgui_impl_vulkan.h"
 #include <vector>
 #include <algorithm>
 #include <utility>
@@ -90,17 +92,40 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
     const bool msaa = M_MSAASAMPLES != VK_SAMPLE_COUNT_1_BIT;
     const bool bloom = m_bloomEnabled && !M_BLOOMIMAGES.empty() && m_debugView == 0;
 
-    std::vector<std::pair<float, size_t>> transparentOrder;
-    for (size_t i = 0; i < M_PRIMITIVES.size(); i++)
+    struct TransparentItem
     {
-        if (M_PRIMITIVES[i].renderClass != RenderClass::Opaque)
+        float distance;
+        const Model* model;
+        const Primitive* prim;
+    };
+
+    std::vector<const Model*> drawModels;
+    for (const auto& model : M_MODELS)
+    {
+        if (model->visible)
         {
-            float distance = glm::length(M_PRIMITIVES[i].boundsCenter - m_camera.position);
-            transparentOrder.emplace_back(distance, i);
+            drawModels.push_back(model.get());
+        }
+    }
+    if (M_GROUND)
+    {
+        drawModels.push_back(M_GROUND.get());
+    }
+
+    std::vector<TransparentItem> transparentOrder;
+    for (const Model* model : drawModels)
+    {
+        for (const Primitive& prim : model->primitives)
+        {
+            if (prim.renderClass != RenderClass::Opaque)
+            {
+                glm::vec3 center = glm::vec3(model->transform * glm::vec4(prim.boundsCenter, 1.0f));
+                transparentOrder.push_back({ glm::length(center - m_camera.position), model, &prim });
+            }
         }
     }
     std::sort(transparentOrder.begin(), transparentOrder.end(),
-                [](const auto& a, const auto& b) { return a.first > b.first; });
+                [](const TransparentItem& a, const TransparentItem& b) { return a.distance > b.distance; });
     const bool hasTransparent = !transparentOrder.empty();
 
     transitionImageLayout(
@@ -183,10 +208,7 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
     scissor.extent = M_SWAPCHAINEXTENT;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    VkBuffer vertexBuffers[] = { M_VERTEXBUFFER.buffer };
-    VkDeviceSize offsets[] = { 0 };
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, M_INDEXBUFFER.buffer, 0, VK_INDEX_TYPE_UINT32);
+    const Model* boundModel = nullptr;
 
     VkDescriptorBufferInfo bufferInfo{};
     bufferInfo.buffer = M_UNIFORMBUFFERS[M_CURRENTFRAME].buffer;
@@ -214,25 +236,34 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
     sceneInfo.imageView = M_SCENECOPY.view;
     sceneInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    auto drawPrimitive = [&](const Primitive& prim)
+    auto drawPrimitive = [&](const Model& model, const Primitive& prim)
     {
-        const Material& material = M_MATERIALS[prim.materialIndex];
+        if (boundModel != &model)
+        {
+            VkBuffer vertexBuffers[] = { model.vertexBuffer.buffer };
+            VkDeviceSize offsets[] = { 0 };
+            vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+            vkCmdBindIndexBuffer(commandBuffer, model.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+            boundModel = &model;
+        }
+
+        const Material& material = model.materials[prim.materialIndex];
 
         VkDescriptorBufferInfo materialInfo{};
-        materialInfo.buffer = M_MATERIALBUFFER.buffer;
-        materialInfo.offset = M_MATERIALSTRIDE * static_cast<VkDeviceSize>(prim.materialIndex);
+        materialInfo.buffer = model.materialBuffer.buffer;
+        materialInfo.offset = model.materialStride * static_cast<VkDeviceSize>(prim.materialIndex);
         materialInfo.range = sizeof(MaterialParams);
 
         std::array<VkDescriptorImageInfo, MATERIAL_TEXTURE_SLOTS> imageInfos{};
         for (uint32_t slot = 0; slot < MATERIAL_TEXTURE_SLOTS; slot++)
         {
             int textureIndex = material.textures[slot];
-            bool present = textureIndex >= 0 && M_TEXTURES[textureIndex].view != VK_NULL_HANDLE;
+            bool present = textureIndex >= 0 && model.textures[textureIndex].view != VK_NULL_HANDLE;
 
             imageInfos[slot].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            imageInfos[slot].imageView = present ? M_TEXTURES[textureIndex].view
+            imageInfos[slot].imageView = present ? model.textures[textureIndex].view
                                                   : M_FALLBACKTEXTURE.view;
-            imageInfos[slot].sampler = present ? M_TEXTURES[textureIndex].sampler
+            imageInfos[slot].sampler = present ? model.textures[textureIndex].sampler
                                                 : M_TEXTURESAMPLER;
         }
 
@@ -286,16 +317,20 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
                             static_cast<uint32_t>(descriptorWrites.size()),
                             descriptorWrites.data());
 
+        glm::mat4 world = model.transform * prim.worldMatrix;
         vkCmdPushConstants(commandBuffer, M_PIPELINELAYOUT, VK_SHADER_STAGE_VERTEX_BIT,
-                            0, sizeof(glm::mat4), &prim.worldMatrix);
+                            0, sizeof(glm::mat4), &world);
         vkCmdDrawIndexed(commandBuffer, prim.indexCount, 1, prim.firstIndex, 0, 0);
     };
 
-    for (const Primitive& prim : M_PRIMITIVES)
+    for (const Model* model : drawModels)
     {
-        if (prim.renderClass == RenderClass::Opaque)
+        for (const Primitive& prim : model->primitives)
         {
-            drawPrimitive(prim);
+            if (prim.renderClass == RenderClass::Opaque)
+            {
+                drawPrimitive(*model, prim);
+            }
         }
     }
 
@@ -458,14 +493,13 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
         vkCmdBeginRendering(commandBuffer, &glassInfo);
         vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-        vkCmdBindIndexBuffer(commandBuffer, M_INDEXBUFFER.buffer, 0, VK_INDEX_TYPE_UINT32);
+        boundModel = nullptr;
 
         RenderClass boundClass = RenderClass::Opaque;
         bool pipelineBound = false;
-        for (const auto& entry : transparentOrder)
+        for (const TransparentItem& entry : transparentOrder)
         {
-            const Primitive& prim = M_PRIMITIVES[entry.second];
+            const Primitive& prim = *entry.prim;
             if (!pipelineBound || prim.renderClass != boundClass)
             {
                 vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -473,7 +507,7 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
                 boundClass = prim.renderClass;
                 pipelineBound = true;
             }
-            drawPrimitive(prim);
+            drawPrimitive(*entry.model, prim);
         }
 
         vkCmdEndRendering(commandBuffer);
@@ -488,7 +522,7 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
 
     auto fullscreenPass = [&](VkPipeline pipeline, VkImageView target, VkExtent2D extent,
                               VkAttachmentLoadOp loadOp, VkImageView input0, VkImageView input1,
-                              const glm::vec4& params)
+                              const glm::vec4& params, bool endPass = true)
     {
         VkRenderingAttachmentInfo attachment{};
         attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -538,7 +572,10 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
         vkCmdPushConstants(commandBuffer, M_POSTPIPELINELAYOUT, VK_SHADER_STAGE_FRAGMENT_BIT,
                             0, sizeof(glm::vec4), &params);
         vkCmdDraw(commandBuffer, 3, 1, 0, 0);
-        vkCmdEndRendering(commandBuffer);
+        if (endPass)
+        {
+            vkCmdEndRendering(commandBuffer);
+        }
     };
 
     auto bloomExtent = [&](size_t level)
@@ -613,7 +650,13 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
                     VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                     M_HDRCOLOR.view, bloom ? M_BLOOMIMAGES[0].view : M_HDRCOLOR.view,
                     glm::vec4(m_exposure, bloom ? m_bloomStrength : 0.0f,
-                                m_debugView != 0 ? 1.0f : 0.0f, 0.0f));
+                                m_debugView != 0 ? 1.0f : 0.0f, 0.0f), false);
+
+    if (m_imguiReady && m_showUi)
+    {
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+    }
+    vkCmdEndRendering(commandBuffer);
 
     transitionImageLayout(
         commandBuffer, M_SWAPCHAINIMAGES[imageIndex],

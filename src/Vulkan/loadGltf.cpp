@@ -6,6 +6,7 @@
 #include <tuple>
 #include <cstring>
 #include <cmath>
+#include <cctype>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -370,7 +371,11 @@ MeshData AlethiaV3::loadGltf(const std::string& path)
     tinygltf::TinyGLTF loader;
     std::string err, warn;
 
-    bool ok = loader.LoadBinaryFromFile(&model, &err, &warn, path);
+    std::string extension = path.size() >= 5 ? path.substr(path.size() - 5) : std::string();
+    for (char& c : extension) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    bool ok = extension == ".gltf"
+        ? loader.LoadASCIIFromFile(&model, &err, &warn, path)
+        : loader.LoadBinaryFromFile(&model, &err, &warn, path);
 
     if (!warn.empty()) std::cout << "  [loadGltf] WARN: " << warn << "\n";
     if (!ok) throw std::runtime_error("Failed to load glTF: " + err);

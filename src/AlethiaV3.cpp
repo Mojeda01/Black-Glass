@@ -43,6 +43,14 @@ void AlethiaV3::drawFrame()
     vkResetFences(M_DEVICE, 1, &M_INFLIGHTFENCES[M_CURRENTFRAME]);
 
     vkResetCommandBuffer(M_COMMANDBUFFERS[M_CURRENTFRAME], 0);
+    beginUiFrame();
+    if (m_shadowDirty)
+    {
+        vkDeviceWaitIdle(M_DEVICE);
+        refreshScene();
+        bakeShadowMap();
+        m_shadowDirty = false;
+    }
     updateUniformBuffer(M_CURRENTFRAME);
     recordCommandBuffers(M_COMMANDBUFFERS[M_CURRENTFRAME], imageIndex);
 
@@ -99,28 +107,26 @@ void AlethiaV3::cleanup()
         vkDeviceWaitIdle(M_DEVICE);
     }
     
+    shutdownImGui();
+
     cleanupSwapchain();
     std::cout << "  [cleanup] Swapchain resources destroyed. \n";
     
-    destroyBuffer(M_VERTEXBUFFER);
-    destroyBuffer(M_INDEXBUFFER);
+    for (auto& model : M_MODELS)
+    {
+        destroyModel(*model);
+    }
+    M_MODELS.clear();
+    if (M_GROUND)
+    {
+        destroyModel(*M_GROUND);
+        M_GROUND.reset();
+    }
 
     if (M_TEXTURESAMPLER != VK_NULL_HANDLE)
     {
         vkDestroySampler(M_DEVICE, M_TEXTURESAMPLER, nullptr);
     }
-    for (auto& image : M_TEXTUREIMAGES)
-    {
-        destroyImage(image);
-    }
-    M_TEXTUREIMAGES.clear();
-    M_TEXTURES.clear();
-    for (VkSampler sampler : M_SAMPLERS)
-    {
-        vkDestroySampler(M_DEVICE, sampler, nullptr);
-    }
-    M_SAMPLERS.clear();
-    destroyBuffer(M_MATERIALBUFFER);
     destroyImage(M_FALLBACKTEXTURE);
 
     destroyImage(M_SHADOWMAP);
@@ -212,6 +218,8 @@ void AlethiaV3::cleanup()
         std::cout << "  [cleanup] Command pool destroyed. \n";
     } 
     
+    destroyAllocator();
+
     if (M_DEVICE != VK_NULL_HANDLE)
     {
         vkDestroyDevice(M_DEVICE, nullptr);
