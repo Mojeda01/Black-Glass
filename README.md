@@ -15,7 +15,7 @@
 
 <br>
 
-<img src="media/showcase.gif" alt="Black Glass rendering a concept car" width="860">
+<img src="media/black_glass_ad.gif" alt="Black Glass rendering a concept car" width="860">
 
 </div>
 
