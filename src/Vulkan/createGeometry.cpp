@@ -3,7 +3,7 @@
 #include <cstring>
 #include <vector>
 
-void AlethiaV3::uploadModelGeometry(Model& model, const MeshData& mesh)
+void AlethiaV3::uploadModelGeometry(ModelAsset& model, const MeshData& mesh)
 {
     auto upload = [&](const void* data, VkDeviceSize size, VkBufferUsageFlags usage) -> AllocatedBuffer
     {

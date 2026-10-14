@@ -29,6 +29,7 @@ struct MaterialData {
 
 struct PushData {
     float4x4 model;
+    float4 highlight;
 };
 
 [[vk::push_constant]]
@@ -330,6 +331,7 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     float3 emissive = material.emissiveFactor.rgb;
     if (material.flags1.x != 0)
         emissive *= emissiveTex.Sample(slotUV(input.texCoord, 4)).rgb;
+    emissive += push.highlight.rgb * push.highlight.w;
 
     float transmission = material.transmissionParams.x;
     bool blendMode = material.flags1.y == 2 && transmission <= 0.0;

@@ -238,17 +238,17 @@ void AlethiaV3::bakeShadowMap()
     uint32_t drawn = 0;
     for (const auto& model : M_MODELS)
     {
-        if (!model->visible)
+        if (!model->visible || model->ghost)
         {
             continue;
         }
 
-        VkBuffer vertexBuffers[] = { model->vertexBuffer.buffer };
+        VkBuffer vertexBuffers[] = { model->asset->vertexBuffer.buffer };
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-        vkCmdBindIndexBuffer(commandBuffer, model->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(commandBuffer, model->asset->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-        for (const Primitive& prim : model->primitives)
+        for (const Primitive& prim : model->asset->primitives)
         {
             if (!prim.castsShadow)
             {

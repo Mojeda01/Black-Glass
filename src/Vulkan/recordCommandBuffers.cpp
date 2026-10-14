@@ -115,7 +115,7 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
     std::vector<TransparentItem> transparentOrder;
     for (const Model* model : drawModels)
     {
-        for (const Primitive& prim : model->primitives)
+        for (const Primitive& prim : model->asset->primitives)
         {
             if (prim.renderClass != RenderClass::Opaque)
             {
@@ -170,30 +170,30 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
     {
         if (boundModel != &model)
         {
-            VkBuffer vertexBuffers[] = { model.vertexBuffer.buffer };
+            VkBuffer vertexBuffers[] = { model.asset->vertexBuffer.buffer };
             VkDeviceSize offsets[] = { 0 };
             vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-            vkCmdBindIndexBuffer(commandBuffer, model.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+            vkCmdBindIndexBuffer(commandBuffer, model.asset->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
             boundModel = &model;
         }
 
-        const Material& material = model.materials[prim.materialIndex];
+        const Material& material = model.asset->materials[prim.materialIndex];
 
         VkDescriptorBufferInfo materialInfo{};
-        materialInfo.buffer = model.materialBuffer.buffer;
-        materialInfo.offset = model.materialStride * static_cast<VkDeviceSize>(prim.materialIndex);
+        materialInfo.buffer = model.asset->materialBuffer.buffer;
+        materialInfo.offset = model.asset->materialStride * static_cast<VkDeviceSize>(prim.materialIndex);
         materialInfo.range = sizeof(MaterialParams);
 
         std::array<VkDescriptorImageInfo, MATERIAL_TEXTURE_SLOTS> imageInfos{};
         for (uint32_t slot = 0; slot < MATERIAL_TEXTURE_SLOTS; slot++)
         {
             int textureIndex = material.textures[slot];
-            bool present = textureIndex >= 0 && model.textures[textureIndex].view != VK_NULL_HANDLE;
+            bool present = textureIndex >= 0 && model.asset->textures[textureIndex].view != VK_NULL_HANDLE;
 
             imageInfos[slot].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            imageInfos[slot].imageView = present ? model.textures[textureIndex].view
+            imageInfos[slot].imageView = present ? model.asset->textures[textureIndex].view
                                                   : M_FALLBACKTEXTURE.view;
-            imageInfos[slot].sampler = present ? model.textures[textureIndex].sampler
+            imageInfos[slot].sampler = present ? model.asset->textures[textureIndex].sampler
                                                 : M_TEXTURESAMPLER;
         }
 
@@ -262,6 +262,18 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
         glm::mat4 world = model.transform * prim.worldMatrix;
         vkCmdPushConstants(commandBuffer, M_PIPELINELAYOUT, VK_SHADER_STAGE_VERTEX_BIT,
                             0, sizeof(glm::mat4), &world);
+
+        glm::vec4 highlight(0.0f);
+        if (model.ghost)
+        {
+            highlight = glm::vec4(0.25f, 0.85f, 1.0f, 0.18f);
+        }
+        else if (&model == m_selected)
+        {
+            highlight = glm::vec4(1.0f, 0.6f, 0.15f, 0.1f);
+        }
+        vkCmdPushConstants(commandBuffer, M_PIPELINELAYOUT, VK_SHADER_STAGE_FRAGMENT_BIT,
+                            sizeof(glm::mat4), sizeof(glm::vec4), &highlight);
         vkCmdDrawIndexed(commandBuffer, prim.indexCount, 1, prim.firstIndex, 0, 0);
     };
 
@@ -338,19 +350,19 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
         const Model* prepassBound = nullptr;
         for (const Model* model : drawModels)
         {
-            for (const Primitive& prim : model->primitives)
+            for (const Primitive& prim : model->asset->primitives)
             {
                 if (prim.renderClass != RenderClass::Opaque ||
-                    model->materials[prim.materialIndex].params.flags1.y == 1)
+                    model->asset->materials[prim.materialIndex].params.flags1.y == 1)
                 {
                     continue;
                 }
                 if (prepassBound != model)
                 {
-                    VkBuffer vertexBuffers[] = { model->vertexBuffer.buffer };
+                    VkBuffer vertexBuffers[] = { model->asset->vertexBuffer.buffer };
                     VkDeviceSize offsets[] = { 0 };
                     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-                    vkCmdBindIndexBuffer(commandBuffer, model->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+                    vkCmdBindIndexBuffer(commandBuffer, model->asset->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
                     prepassBound = model;
                 }
                 glm::mat4 world = model->transform * prim.worldMatrix;
@@ -521,7 +533,7 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
             {
                 continue;
             }
-            for (const Primitive& prim : model->primitives)
+            for (const Primitive& prim : model->asset->primitives)
             {
                 if (prim.renderClass == RenderClass::Opaque)
                 {
@@ -626,7 +638,7 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
 
     for (const Model* model : drawModels)
     {
-        for (const Primitive& prim : model->primitives)
+        for (const Primitive& prim : model->asset->primitives)
         {
             if (prim.renderClass == RenderClass::Opaque)
             {

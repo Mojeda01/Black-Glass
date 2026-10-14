@@ -78,13 +78,34 @@ void initv3() {
                 });
 
         glfwSetMouseButtonCallback(window.get(),
-                [](GLFWwindow* w, int button, int action, int) {
+                [](GLFWwindow* w, int button, int action, int mods) {
                     auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
-                    if (r && button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS
-                        && !r->mouseCaptured() && !r->uiWantsMouse())
+                    if (!r)
                     {
-                        r->setMouseCaptured(true);
+                        return;
                     }
+                    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+                    {
+                        r->onLeftPress((mods & GLFW_MOD_SHIFT) != 0);
+                    }
+                    else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
+                    {
+                        r->onLeftRelease();
+                    }
+                    else if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
+                    {
+                        r->onRightPress();
+                    }
+                    else if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE)
+                    {
+                        r->onRightRelease();
+                    }
+                });
+
+        glfwSetScrollCallback(window.get(),
+                [](GLFWwindow* w, double, double yoffset) {
+                    auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
+                    if (r) r->onScroll(yoffset);
                 });
 
         glfwSetCursorPosCallback(window.get(),
@@ -113,6 +134,11 @@ void initv3() {
                     }
                     if (r && r->uiWantsKeyboard())
                     {
+                        return;
+                    }
+                    if (r && action == GLFW_PRESS && (key == GLFW_KEY_DELETE || key == GLFW_KEY_BACKSPACE))
+                    {
+                        r->deleteSelected();
                         return;
                     }
                     if (r && action == GLFW_PRESS && key >= GLFW_KEY_0 && key <= GLFW_KEY_9)

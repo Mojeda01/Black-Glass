@@ -237,7 +237,7 @@ void AlethiaV3::createFallbackTexture()
     M_FALLBACKTEXTURE = createTextureFromPixels(white, 1, 1, VK_FORMAT_R8G8B8A8_UNORM);
 }
 
-void AlethiaV3::createModelTextures(Model& model, const MeshData& mesh)
+void AlethiaV3::createModelTextures(ModelAsset& model, const MeshData& mesh)
 {
     for (const SamplerData& data : mesh.samplers)
     {
@@ -271,7 +271,7 @@ void AlethiaV3::createModelTextures(Model& model, const MeshData& mesh)
     createModelMaterialBuffer(model);
 }
 
-void AlethiaV3::createModelMaterialBuffer(Model& model)
+void AlethiaV3::createModelMaterialBuffer(ModelAsset& model)
 {
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(M_PHYSICALDEVICE, &properties);

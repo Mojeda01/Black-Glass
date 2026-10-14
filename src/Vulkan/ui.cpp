@@ -148,17 +148,17 @@ void AlethiaV3::buildUi()
     ImGui::Begin("Black Glass", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
     ImGui::Text("%.1f FPS  (%.2f ms)", io.Framerate, 1000.0f / std::max(io.Framerate, 1.0f));
-    ImGui::TextDisabled("%s", m_mouseCaptured ? "Tab: release mouse" : "Click the viewport to fly, Tab to release");
+    ImGui::TextDisabled("%s", m_mouseCaptured ? "Tab: release mouse" : "Hold right mouse to fly, Tab to toggle");
     ImGui::TextDisabled("F1: hide UI    Esc: quit");
 
-    if (ImGui::CollapsingHeader("Models", ImGuiTreeNodeFlags_DefaultOpen))
+    if (ImGui::CollapsingHeader("Model library", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::SetNextItemWidth(320.0f);
         ImGui::InputText("##modelPath", m_modelPathInput, sizeof(m_modelPathInput));
         ImGui::SameLine();
-        if (ImGui::Button("Load"))
+        if (ImGui::Button("Import"))
         {
-            loadModel(m_modelPathInput);
+            importAsset(m_modelPathInput);
         }
         if (!m_loadError.empty())
         {
@@ -169,12 +169,93 @@ void AlethiaV3::buildUi()
             ImGui::PopStyleColor();
         }
 
+        size_t unloadIndex = M_LIBRARY.size();
+        int placeIndex = -1;
+        int addIndex = -1;
+        for (size_t i = 0; i < M_LIBRARY.size(); i++)
+        {
+            int instances = 0;
+            for (const auto& model : M_MODELS)
+            {
+                if (model->asset == M_LIBRARY[i] && !model->ghost)
+                {
+                    instances++;
+                }
+            }
+
+            ImGui::PushID(static_cast<int>(i));
+            ImGui::Text("%s  (%d placed)", M_LIBRARY[i]->name.c_str(), instances);
+            ImGui::SameLine();
+            bool placing = m_placingAsset == static_cast<int>(i);
+            if (ImGui::Button(placing ? "Cancel" : "Place"))
+            {
+                if (placing)
+                {
+                    cancelPlacement();
+                }
+                else
+                {
+                    placeIndex = static_cast<int>(i);
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Add"))
+            {
+                addIndex = static_cast<int>(i);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Unload"))
+            {
+                unloadIndex = i;
+            }
+            ImGui::PopID();
+        }
+
+        if (m_ghost)
+        {
+            ImGui::TextDisabled("Click the floor to place, Shift-click to keep placing");
+            ImGui::TextDisabled("Scroll to rotate, Delete to cancel");
+        }
+
+        if (placeIndex >= 0)
+        {
+            beginPlacement(placeIndex);
+        }
+        if (addIndex >= 0)
+        {
+            m_selected = addInstance(addIndex, true);
+        }
+        if (unloadIndex < M_LIBRARY.size())
+        {
+            removeAsset(unloadIndex);
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::TextDisabled("Click a model to select, drag to move, scroll to rotate");
+
         size_t removeIndex = M_MODELS.size();
         for (size_t i = 0; i < M_MODELS.size(); i++)
         {
             Model& model = *M_MODELS[i];
+            if (model.ghost)
+            {
+                continue;
+            }
+
             ImGui::PushID(static_cast<int>(i));
-            if (ImGui::TreeNodeEx(model.name.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen;
+            if (&model == m_selected)
+            {
+                flags |= ImGuiTreeNodeFlags_Selected;
+            }
+            bool open = ImGui::TreeNodeEx(model.name.c_str(), flags);
+            if (ImGui::IsItemClicked())
+            {
+                m_selected = &model;
+            }
+            if (open)
             {
                 bool changed = false;
                 changed |= ImGui::Checkbox("Visible", &model.visible);

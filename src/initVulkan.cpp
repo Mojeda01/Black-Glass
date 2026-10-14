@@ -54,11 +54,13 @@ void AlethiaV3::initVulkan()
     std::cout << "→ createGroundModel()\n";
     createGroundModel();
 
-    std::cout << "→ loadModel()\n";
-    if (!loadModel(std::string(ALETHIA_V3_ASSET_DIR) + "/CarConcept.glb"))
+    std::cout << "→ importAsset()\n";
+    int defaultAsset = importAsset(std::string(ALETHIA_V3_ASSET_DIR) + "/CarConcept.glb");
+    if (defaultAsset < 0)
     {
         throw std::runtime_error("Failed to load the default model: " + m_loadError);
     }
+    addInstance(defaultAsset, true);
     frameScene();
 
     std::cout << "→ createDescriptorSetLayout()\n";

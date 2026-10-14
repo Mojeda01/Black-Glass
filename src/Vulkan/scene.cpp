@@ -83,19 +83,23 @@ void AlethiaV3::createGroundModel()
     mesh.primitives.push_back(prim);
 
     M_GROUND = std::make_unique<Model>();
+    M_GROUND->asset = std::make_shared<ModelAsset>();
+    M_GROUND->asset->name = "Ground";
     M_GROUND->name = "Ground";
     M_GROUND->isGround = true;
-    uploadModelGeometry(*M_GROUND, mesh);
-    createModelTextures(*M_GROUND, mesh);
+    uploadModelGeometry(*M_GROUND->asset, mesh);
+    createModelTextures(*M_GROUND->asset, mesh);
 
     std::cout << "  [createGroundModel] SUCCESS - Ground quad created.\n";
 }
 
 void AlethiaV3::updateModelTransform(Model& model)
 {
-    glm::vec3 pivot((model.localMin.x + model.localMax.x) * 0.5f,
-                    model.localMin.y,
-                    (model.localMin.z + model.localMax.z) * 0.5f);
+    const glm::vec3& localMin = model.asset->localMin;
+    const glm::vec3& localMax = model.asset->localMax;
+    glm::vec3 pivot((localMin.x + localMax.x) * 0.5f,
+                    localMin.y,
+                    (localMin.z + localMax.z) * 0.5f);
 
     model.transform = glm::translate(glm::mat4(1.0f), model.position)
                     * glm::rotate(glm::mat4(1.0f), glm::radians(model.yawDegrees), glm::vec3(0.0f, 1.0f, 0.0f))
@@ -106,9 +110,9 @@ void AlethiaV3::updateModelTransform(Model& model)
     glm::vec3 hi(std::numeric_limits<float>::lowest());
     for (int corner = 0; corner < 8; corner++)
     {
-        glm::vec3 local((corner & 1) ? model.localMax.x : model.localMin.x,
-                        (corner & 2) ? model.localMax.y : model.localMin.y,
-                        (corner & 4) ? model.localMax.z : model.localMin.z);
+        glm::vec3 local((corner & 1) ? localMax.x : localMin.x,
+                        (corner & 2) ? localMax.y : localMin.y,
+                        (corner & 4) ? localMax.z : localMin.z);
         glm::vec3 world = glm::vec3(model.transform * glm::vec4(local, 1.0f));
         lo = glm::min(lo, world);
         hi = glm::max(hi, world);
@@ -123,14 +127,14 @@ void AlethiaV3::placeNewModel(Model& model)
     bool any = false;
     for (const auto& other : M_MODELS)
     {
-        if (other->visible)
+        if (other->visible && !other->ghost && other.get() != &model)
         {
             sceneMaxX = std::max(sceneMaxX, other->worldMax.x);
             any = true;
         }
     }
 
-    float width = (model.localMax.x - model.localMin.x) * model.scale;
+    float width = (model.asset->localMax.x - model.asset->localMin.x) * model.scale;
     float x = 0.0f;
     if (any)
     {
@@ -151,7 +155,7 @@ void AlethiaV3::refreshScene()
     for (auto& model : M_MODELS)
     {
         updateModelTransform(*model);
-        if (!model->visible)
+        if (!model->visible || model->ghost)
         {
             continue;
         }
@@ -214,7 +218,7 @@ void AlethiaV3::frameScene()
     m_camera.position = center - m_camera.front() * distance;
 }
 
-bool AlethiaV3::loadModel(const std::string& path)
+int AlethiaV3::importAsset(const std::string& path)
 {
     try
     {
@@ -226,9 +230,9 @@ bool AlethiaV3::loadModel(const std::string& path)
         MeshData mesh = loadGltf(path);
         classifyPrimitives(mesh);
 
-        auto model = std::make_unique<Model>();
-        model->path = path;
-        model->name = std::filesystem::path(path).stem().string();
+        auto asset = std::make_shared<ModelAsset>();
+        asset->path = path;
+        asset->name = std::filesystem::path(path).stem().string();
 
         glm::vec3 lo(std::numeric_limits<float>::max());
         glm::vec3 hi(std::numeric_limits<float>::lowest());
@@ -242,58 +246,90 @@ bool AlethiaV3::loadModel(const std::string& path)
                 hi = glm::max(hi, world);
             }
         }
-        model->localMin = lo;
-        model->localMax = hi;
+        asset->localMin = lo;
+        asset->localMax = hi;
 
         vkDeviceWaitIdle(M_DEVICE);
         try
         {
-            uploadModelGeometry(*model, mesh);
-            createModelTextures(*model, mesh);
+            uploadModelGeometry(*asset, mesh);
+            createModelTextures(*asset, mesh);
         }
         catch (...)
         {
-            destroyModel(*model);
+            destroyAsset(*asset);
             throw;
         }
 
-        refreshScene();
-        placeNewModel(*model);
-        M_MODELS.push_back(std::move(model));
-        m_shadowDirty = true;
+        M_LIBRARY.push_back(std::move(asset));
         m_loadError.clear();
 
-        std::cout << "  [loadModel] SUCCESS - " << path << "\n";
-        return true;
+        std::cout << "  [importAsset] SUCCESS - " << path << "\n";
+        return static_cast<int>(M_LIBRARY.size()) - 1;
     }
     catch (const std::exception& e)
     {
         m_loadError = e.what();
-        std::cerr << "  [loadModel] FAILED - " << e.what() << "\n";
-        return false;
+        std::cerr << "  [importAsset] FAILED - " << e.what() << "\n";
+        return -1;
     }
 }
 
-void AlethiaV3::destroyModel(Model& model)
+Model* AlethiaV3::addInstance(int assetIndex, bool autoPlace)
 {
-    destroyBuffer(model.vertexBuffer);
-    destroyBuffer(model.indexBuffer);
-    destroyBuffer(model.materialBuffer);
+    if (assetIndex < 0 || assetIndex >= static_cast<int>(M_LIBRARY.size()))
+    {
+        return nullptr;
+    }
 
-    for (auto& image : model.textureImages)
+    auto model = std::make_unique<Model>();
+    model->asset = M_LIBRARY[assetIndex];
+
+    int count = 0;
+    for (const auto& other : M_MODELS)
+    {
+        if (other->asset == model->asset && !other->ghost)
+        {
+            count++;
+        }
+    }
+    model->name = model->asset->name + (count > 0 ? " #" + std::to_string(count + 1) : "");
+
+    if (autoPlace)
+    {
+        refreshScene();
+        placeNewModel(*model);
+        m_shadowDirty = true;
+    }
+    else
+    {
+        updateModelTransform(*model);
+    }
+
+    M_MODELS.push_back(std::move(model));
+    return M_MODELS.back().get();
+}
+
+void AlethiaV3::destroyAsset(ModelAsset& asset)
+{
+    destroyBuffer(asset.vertexBuffer);
+    destroyBuffer(asset.indexBuffer);
+    destroyBuffer(asset.materialBuffer);
+
+    for (auto& image : asset.textureImages)
     {
         destroyImage(image);
     }
-    model.textureImages.clear();
-    model.textures.clear();
+    asset.textureImages.clear();
+    asset.textures.clear();
 
-    for (VkSampler sampler : model.samplers)
+    for (VkSampler sampler : asset.samplers)
     {
         vkDestroySampler(M_DEVICE, sampler, nullptr);
     }
-    model.samplers.clear();
-    model.primitives.clear();
-    model.materials.clear();
+    asset.samplers.clear();
+    asset.primitives.clear();
+    asset.materials.clear();
 }
 
 void AlethiaV3::removeModel(size_t index)
@@ -303,8 +339,49 @@ void AlethiaV3::removeModel(size_t index)
         return;
     }
 
-    vkDeviceWaitIdle(M_DEVICE);
-    destroyModel(*M_MODELS[index]);
+    Model* target = M_MODELS[index].get();
+    if (m_selected == target)
+    {
+        m_selected = nullptr;
+        m_dragging = false;
+    }
+    if (m_ghost == target)
+    {
+        m_ghost = nullptr;
+        m_placingAsset = -1;
+    }
     M_MODELS.erase(M_MODELS.begin() + static_cast<std::ptrdiff_t>(index));
+    m_shadowDirty = true;
+}
+
+void AlethiaV3::removeAsset(size_t index)
+{
+    if (index >= M_LIBRARY.size())
+    {
+        return;
+    }
+
+    vkDeviceWaitIdle(M_DEVICE);
+
+    std::shared_ptr<ModelAsset> asset = M_LIBRARY[index];
+    for (size_t i = M_MODELS.size(); i-- > 0;)
+    {
+        if (M_MODELS[i]->asset == asset)
+        {
+            removeModel(i);
+        }
+    }
+
+    if (m_placingAsset == static_cast<int>(index))
+    {
+        cancelPlacement();
+    }
+    else if (m_placingAsset > static_cast<int>(index))
+    {
+        m_placingAsset--;
+    }
+
+    destroyAsset(*asset);
+    M_LIBRARY.erase(M_LIBRARY.begin() + static_cast<std::ptrdiff_t>(index));
     m_shadowDirty = true;
 }

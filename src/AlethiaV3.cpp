@@ -44,6 +44,7 @@ void AlethiaV3::drawFrame()
 
     vkResetCommandBuffer(M_COMMANDBUFFERS[M_CURRENTFRAME], 0);
     beginUiFrame();
+    updateInteraction();
     if (m_shadowDirty)
     {
         vkDeviceWaitIdle(M_DEVICE);
@@ -112,14 +113,17 @@ void AlethiaV3::cleanup()
     cleanupSwapchain();
     std::cout << "  [cleanup] Swapchain resources destroyed. \n";
     
-    for (auto& model : M_MODELS)
-    {
-        destroyModel(*model);
-    }
     M_MODELS.clear();
+    m_selected = nullptr;
+    m_ghost = nullptr;
+    for (auto& asset : M_LIBRARY)
+    {
+        destroyAsset(*asset);
+    }
+    M_LIBRARY.clear();
     if (M_GROUND)
     {
-        destroyModel(*M_GROUND);
+        destroyAsset(*M_GROUND->asset);
         M_GROUND.reset();
     }
 

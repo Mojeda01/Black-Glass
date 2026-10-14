@@ -55,6 +55,7 @@ add_library(alethia_v3 STATIC
     Vulkan/createHdr.cpp
     Vulkan/createEffects.cpp
     Vulkan/scene.cpp
+    Vulkan/placement.cpp
     Vulkan/createShadow.cpp
     Vulkan/ui.cpp
     Vulkan/vmaImpl.cpp

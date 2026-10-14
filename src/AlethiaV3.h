@@ -173,12 +173,10 @@ struct MeshData {
     std::vector<Material> materials;
 };
 
-struct Model
+struct ModelAsset
 {
     std::string name;
     std::string path;
-    bool visible = true;
-    bool isGround = false;
     AllocatedBuffer vertexBuffer{};
     AllocatedBuffer indexBuffer{};
     std::vector<AllocatedImage> textureImages;
@@ -190,6 +188,15 @@ struct Model
     std::vector<Primitive> primitives;
     glm::vec3 localMin{ 0.0f };
     glm::vec3 localMax{ 0.0f };
+};
+
+struct Model
+{
+    std::shared_ptr<ModelAsset> asset;
+    std::string name;
+    bool visible = true;
+    bool isGround = false;
+    bool ghost = false;
     glm::vec3 position{ 0.0f };
     float yawDegrees = 0.0f;
     float scale = 1.0f;
@@ -284,6 +291,12 @@ public:
     bool uiWantsKeyboard() const;
     void toggleMouseCapture();
     void toggleUi();
+    void onLeftPress(bool shiftHeld);
+    void onLeftRelease();
+    void onRightPress();
+    void onRightRelease();
+    void onScroll(double delta);
+    void deleteSelected();
     Camera& camera() { return m_camera; }
 private:
     GLFWwindow* m_window = nullptr;
@@ -395,8 +408,15 @@ private:
     std::vector<VkCommandBuffer> M_COMMANDBUFFERS;
 
     // GEOMETRY
+    std::vector<std::shared_ptr<ModelAsset>> M_LIBRARY;
     std::vector<std::unique_ptr<Model>> M_MODELS;
     std::unique_ptr<Model> M_GROUND;
+    Model* m_selected = nullptr;
+    Model* m_ghost = nullptr;
+    int m_placingAsset = -1;
+    bool m_dragging = false;
+    glm::vec2 m_dragOffset{ 0.0f };
+    bool m_flyHeld = false;
     std::string m_loadError;
     char m_modelPathInput[512] = {};
     
@@ -436,9 +456,16 @@ private:
     void destroyEffectResources();
     void createIBL();
     void classifyPrimitives(MeshData& mesh);
-    bool loadModel(const std::string& path);
+    int importAsset(const std::string& path);
+    Model* addInstance(int assetIndex, bool autoPlace);
     void removeModel(size_t index);
-    void destroyModel(Model& model);
+    void removeAsset(size_t index);
+    void destroyAsset(ModelAsset& asset);
+    void beginPlacement(int assetIndex);
+    void cancelPlacement();
+    void updateInteraction();
+    bool cursorRay(glm::vec3& origin, glm::vec3& direction) const;
+    Model* pickModel(const glm::vec3& origin, const glm::vec3& direction, float& distance);
     void updateModelTransform(Model& model);
     void placeNewModel(Model& model);
     void createGroundModel();
@@ -453,15 +480,15 @@ private:
     // PIPELINE 
     void createPipelineLayout();
     void createGraphicsPipeline();
-    void uploadModelGeometry(Model& model, const MeshData& mesh);
+    void uploadModelGeometry(ModelAsset& model, const MeshData& mesh);
     void createDescriptorSetLayout();
     void createUniformBuffers();
     void updateUniformBuffer(uint32_t currentImage);
     AllocatedImage createTextureFromPixels(const unsigned char* pixels, int width, int height,
                                             VkFormat format);
     void createFallbackTexture();
-    void createModelTextures(Model& model, const MeshData& mesh);
-    void createModelMaterialBuffer(Model& model);
+    void createModelTextures(ModelAsset& model, const MeshData& mesh);
+    void createModelMaterialBuffer(ModelAsset& model);
     VkSampler createSamplerObject(const SamplerData& data);
     MeshData loadGltf(const std::string& path);
     void createTextureSampler();
