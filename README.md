@@ -49,6 +49,15 @@ It is meant to be a **standard template to start from**. Clone it, load your own
 
 <br>
 
+<div align="center">
+<img src="media/selection_test.gif" alt="Selection test" width="860">
+<br>
+<sub>Selection: The selection tool in action.</sub>
+</div>
+
+<br>
+
+
 ## Quick start
 
 You need the Vulkan SDK (for `slangc`), GLFW and CMake.
