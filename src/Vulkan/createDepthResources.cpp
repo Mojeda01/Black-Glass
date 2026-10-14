@@ -36,7 +36,9 @@ void AlethiaV3::createDepthResources()
         VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        VK_IMAGE_ASPECT_DEPTH_BIT
+        VK_IMAGE_ASPECT_DEPTH_BIT,
+        1, 1, 0, VK_IMAGE_VIEW_TYPE_2D,
+        M_MSAASAMPLES
     );
 
     std::cout << "  [createDepthResources] SUCCESS - Depth image created (format "

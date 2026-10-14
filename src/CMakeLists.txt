@@ -51,6 +51,8 @@ add_library(alethia_v3 STATIC
     Vulkan/createDepthResources.cpp
     Vulkan/createDescriptors.cpp
     Vulkan/createTexture.cpp
+    Vulkan/createIBL.cpp
+    Vulkan/createHdr.cpp
     Vulkan/loadGltf.cpp
     initVulkan.cpp
 )

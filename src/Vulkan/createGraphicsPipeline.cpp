@@ -103,7 +103,7 @@ void AlethiaV3::createGraphicsPipeline()
     VkPipelineMultisampleStateCreateInfo multiSampling{};
     multiSampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multiSampling.sampleShadingEnable = VK_FALSE;
-    multiSampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multiSampling.rasterizationSamples = M_MSAASAMPLES;
 
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
     colorBlendAttachment.colorWriteMask =   VK_COLOR_COMPONENT_R_BIT    |   VK_COLOR_COMPONENT_G_BIT    |
@@ -127,7 +127,8 @@ void AlethiaV3::createGraphicsPipeline()
     VkPipelineRenderingCreateInfo pipelineRenderingInfo{};
     pipelineRenderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
     pipelineRenderingInfo.colorAttachmentCount = 1;
-    pipelineRenderingInfo.pColorAttachmentFormats = &M_SWAPCHAINIMAGEFORMAT;
+    VkFormat hdrFormat = HDR_FORMAT;
+    pipelineRenderingInfo.pColorAttachmentFormats = &hdrFormat;
     pipelineRenderingInfo.depthAttachmentFormat = M_DEPTHIMAGE.format;
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -151,6 +152,27 @@ void AlethiaV3::createGraphicsPipeline()
     {
         vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
         throw std::runtime_error("Failed to create graphics pipeline!");
+    }
+
+    VkPipelineShaderStageCreateInfo skyVertStageInfo = vertShaderStageInfo;
+    skyVertStageInfo.pName = "skyVertex";
+    VkPipelineShaderStageCreateInfo skyFragStageInfo = fragShaderStageInfo;
+    skyFragStageInfo.pName = "skyFragment";
+    VkPipelineShaderStageCreateInfo skyStages[] = { skyVertStageInfo, skyFragStageInfo };
+
+    VkPipelineVertexInputStateCreateInfo emptyVertexInput{};
+    emptyVertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+    depthStencil.depthWriteEnable = VK_FALSE;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+
+    pipelineInfo.pStages = skyStages;
+    pipelineInfo.pVertexInputState = &emptyVertexInput;
+
+    if (vkCreateGraphicsPipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &M_SKYPIPELINE) != VK_SUCCESS)
+    {
+        vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
+        throw std::runtime_error("Failed to create sky pipeline!");
     }
 
     vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);

@@ -123,6 +123,19 @@ void AlethiaV3::cleanup()
     destroyBuffer(M_MATERIALBUFFER);
     destroyImage(M_FALLBACKTEXTURE);
 
+    destroyImage(M_IBLENV);
+    destroyImage(M_IBLIRRADIANCE);
+    destroyImage(M_IBLPREFILTER);
+    destroyImage(M_IBLBRDF);
+    if (M_IBLSAMPLER != VK_NULL_HANDLE)
+    {
+        vkDestroySampler(M_DEVICE, M_IBLSAMPLER, nullptr);
+    }
+    if (M_POSTSAMPLER != VK_NULL_HANDLE)
+    {
+        vkDestroySampler(M_DEVICE, M_POSTSAMPLER, nullptr);
+    }
+
     for (auto& buffer : M_UNIFORMBUFFERS)
     {
         destroyBuffer(buffer);
@@ -143,6 +156,24 @@ void AlethiaV3::cleanup()
     if (!M_INFLIGHTFENCES.empty())
     {
         std::cout << "  [cleanup] Sync Objects destroyed. \n";
+    }
+
+    for (VkPipeline pipeline : { M_SKYPIPELINE, M_BLOOMDOWNPIPELINE, M_BLOOMUPPIPELINE, M_COMPOSITEPIPELINE })
+    {
+        if (pipeline != VK_NULL_HANDLE)
+        {
+            vkDestroyPipeline(M_DEVICE, pipeline, nullptr);
+        }
+    }
+
+    if (M_POSTPIPELINELAYOUT != VK_NULL_HANDLE)
+    {
+        vkDestroyPipelineLayout(M_DEVICE, M_POSTPIPELINELAYOUT, nullptr);
+    }
+
+    if (M_POSTDESCRIPTORLAYOUT != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorSetLayout(M_DEVICE, M_POSTDESCRIPTORLAYOUT, nullptr);
     }
 
     if (M_GRAPHICSPIPELINE != VK_NULL_HANDLE)

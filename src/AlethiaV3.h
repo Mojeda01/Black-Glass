@@ -161,9 +161,20 @@ struct UniformBufferObject
 {
     glm::mat4 view;
     glm::mat4 proj;
+    glm::mat4 invViewProj;
     glm::vec4 cameraPos;
     glm::vec4 debugParams;
+    glm::vec4 iblParams;
 };
+
+constexpr VkFormat HDR_FORMAT = VK_FORMAT_R16G16B16A16_SFLOAT;
+constexpr uint32_t IBL_ENV_SIZE = 1024;
+constexpr uint32_t IBL_IRRADIANCE_SIZE = 32;
+constexpr uint32_t IBL_PREFILTER_SIZE = 256;
+constexpr uint32_t IBL_BRDF_SIZE = 256;
+constexpr uint32_t IBL_TEXTURE_BINDINGS = 4;
+constexpr uint32_t BLOOM_MAX_LEVELS = 6;
+constexpr uint32_t GRAPHICS_BINDING_COUNT = 2 + MATERIAL_TEXTURE_SLOTS + IBL_TEXTURE_BINDINGS;
 
 // Number of frame the CPU is allowed to record ahead of the GPU.
 constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
@@ -210,6 +221,8 @@ public:
     void setMouseCaptured(bool captured);
     void setDebugView(int view) { m_debugView = view; }
     bool mouseCaptured() const { return m_mouseCaptured; }
+    void adjustExposure(float stops);
+    void toggleBloom();
     Camera& camera() { return m_camera; }
 private:
     GLFWwindow* m_window = nullptr;
@@ -219,6 +232,9 @@ private:
     bool m_firstMouse = true;
     bool m_mouseCaptured = false;
     int m_debugView = 0;
+    float m_exposure = 1.0f;
+    float m_bloomStrength = 0.04f;
+    bool m_bloomEnabled = true;
     double m_lastX = 0.0;
     double m_lastY = 0.0;
     float m_deltaTime = 0.0f;
@@ -242,6 +258,27 @@ private:
 
     // DEPTH
     AllocatedImage M_DEPTHIMAGE{};
+
+    // HDR
+    VkSampleCountFlagBits M_MSAASAMPLES = VK_SAMPLE_COUNT_1_BIT;
+    AllocatedImage M_MSAACOLOR{};
+    AllocatedImage M_HDRCOLOR{};
+    std::vector<AllocatedImage> M_BLOOMIMAGES;
+    VkSampler M_POSTSAMPLER = VK_NULL_HANDLE;
+    VkDescriptorSetLayout M_POSTDESCRIPTORLAYOUT = VK_NULL_HANDLE;
+    VkPipelineLayout M_POSTPIPELINELAYOUT = VK_NULL_HANDLE;
+    VkPipeline M_BLOOMDOWNPIPELINE = VK_NULL_HANDLE;
+    VkPipeline M_BLOOMUPPIPELINE = VK_NULL_HANDLE;
+    VkPipeline M_COMPOSITEPIPELINE = VK_NULL_HANDLE;
+
+    // IBL
+    AllocatedImage M_IBLENV{};
+    AllocatedImage M_IBLIRRADIANCE{};
+    AllocatedImage M_IBLPREFILTER{};
+    AllocatedImage M_IBLBRDF{};
+    VkSampler M_IBLSAMPLER = VK_NULL_HANDLE;
+    float M_IBLMAXMIP = 0.0f;
+    bool M_IBLFROMFILE = false;
     
     // TEXTURE
     std::vector<AllocatedImage> M_TEXTUREIMAGES;
@@ -256,6 +293,7 @@ private:
     // PIPELINE 
     VkPipelineLayout M_PIPELINELAYOUT = VK_NULL_HANDLE;
     VkPipeline M_GRAPHICSPIPELINE = VK_NULL_HANDLE;
+    VkPipeline M_SKYPIPELINE = VK_NULL_HANDLE;
 
     // COMMANDS 
     VkCommandPool M_COMMANDPOOL = VK_NULL_HANDLE;
@@ -293,6 +331,11 @@ private:
     void recreateSwapchain();
     void cleanupSwapchain();
     void createDepthResources();
+    void pickMsaaSamples();
+    void createHdrResources();
+    void destroyHdrResources();
+    void createPostResources();
+    void createIBL();
 
     // PIPELINE 
     void createPipelineLayout();
@@ -334,7 +377,11 @@ private:
                                 VkImageTiling tiling, VkImageUsageFlags usage,
                                 VkMemoryPropertyFlags properties,
                                 VkImageAspectFlags aspectFlags,
-                                uint32_t mipLevels = 1);
+                                uint32_t mipLevels = 1,
+                                uint32_t arrayLayers = 1,
+                                VkImageCreateFlags flags = 0,
+                                VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_2D,
+                                VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT);
     void destroyImage(AllocatedImage& image);
     AllocatedBuffer createBuffer(   VkDeviceSize size,
                                     VkBufferUsageFlags usage,

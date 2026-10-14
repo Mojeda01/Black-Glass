@@ -29,8 +29,14 @@ void AlethiaV3::initVulkan()
     std::cout << "→ createImageViews()\n";
     createImageViews();
     
+    std::cout << "→ pickMsaaSamples()\n";
+    pickMsaaSamples();
+
     std::cout << "→ createDepthResources()\n";
     createDepthResources();
+
+    std::cout << "→ createHdrResources()\n";
+    createHdrResources();
 
     std::cout << "→ createCommandPool()\n";
     createCommandPool();
@@ -53,6 +59,9 @@ void AlethiaV3::initVulkan()
     std::cout << "→ createDescriptorSetLayout()\n";
     createDescriptorSetLayout();
 
+    std::cout << "→ createIBL()\n";
+    createIBL();
+
     std::cout << "→ createUniformBuffers()\n";
     createUniformBuffers();
 
@@ -67,4 +76,7 @@ void AlethiaV3::initVulkan()
 
     std::cout << "→ createGraphicsPipeline()\n";
     createGraphicsPipeline();
+
+    std::cout << "→ createPostResources()\n";
+    createPostResources();
 }

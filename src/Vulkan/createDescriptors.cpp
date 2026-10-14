@@ -9,7 +9,7 @@
 
 void AlethiaV3::createDescriptorSetLayout()
 {
-    std::array<VkDescriptorSetLayoutBinding, 2 + MATERIAL_TEXTURE_SLOTS> bindings{};
+    std::array<VkDescriptorSetLayoutBinding, GRAPHICS_BINDING_COUNT> bindings{};
 
     bindings[0].binding = 0;
     bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -27,6 +27,15 @@ void AlethiaV3::createDescriptorSetLayout()
         bindings[2 + slot].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         bindings[2 + slot].descriptorCount = 1;
         bindings[2 + slot].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    }
+
+    for (uint32_t i = 0; i < IBL_TEXTURE_BINDINGS; i++)
+    {
+        uint32_t index = 2 + MATERIAL_TEXTURE_SLOTS + i;
+        bindings[index].binding = index;
+        bindings[index].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        bindings[index].descriptorCount = 1;
+        bindings[index].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     }
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -129,8 +138,11 @@ void AlethiaV3::updateUniformBuffer(uint32_t currentImage)
 
     ubo.proj[1][1] *= -1;
 
+    ubo.invViewProj = glm::inverse(ubo.proj * ubo.view);
+
     ubo.cameraPos = glm::vec4(m_camera.position, 1.0f);
     ubo.debugParams = glm::vec4(static_cast<float>(m_debugView), 0.0f, 0.0f, 0.0f);
+    ubo.iblParams = glm::vec4(M_IBLMAXMIP, 1.0f, M_IBLFROMFILE ? 0.0f : 1.0f, 0.0f);
 
     std::memcpy(M_UNIFORMBUFFERSMAPPED[currentImage], &ubo, sizeof(ubo));
 }

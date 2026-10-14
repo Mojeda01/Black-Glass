@@ -106,6 +106,15 @@ void initv3() {
                     {
                         r->setDebugView(key - GLFW_KEY_0);
                     }
+                    if (r && (action == GLFW_PRESS || action == GLFW_REPEAT))
+                    {
+                        if (key == GLFW_KEY_EQUAL) r->adjustExposure(0.25f);
+                        if (key == GLFW_KEY_MINUS) r->adjustExposure(-0.25f);
+                    }
+                    if (r && action == GLFW_PRESS && key == GLFW_KEY_B)
+                    {
+                        r->toggleBloom();
+                    }
                  });
 
         while (!window.shouldClose()) {

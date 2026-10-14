@@ -130,7 +130,11 @@ AllocatedImage AlethiaV3::createImage(  uint32_t width, uint32_t height, VkForma
                                         VkImageTiling tiling, VkImageUsageFlags usage,
                                         VkMemoryPropertyFlags properties,
                                         VkImageAspectFlags aspectFlags,
-                                        uint32_t mipLevels)
+                                        uint32_t mipLevels,
+                                        uint32_t arrayLayers,
+                                        VkImageCreateFlags flags,
+                                        VkImageViewType viewType,
+                                        VkSampleCountFlagBits samples)
 {
     AllocatedImage result{};
     result.format = format;
@@ -142,12 +146,13 @@ AllocatedImage AlethiaV3::createImage(  uint32_t width, uint32_t height, VkForma
     imageInfo.extent.height = height;
     imageInfo.extent.depth = 1;
     imageInfo.mipLevels = mipLevels;
-    imageInfo.arrayLayers = 1;
+    imageInfo.arrayLayers = arrayLayers;
+    imageInfo.flags = flags;
     imageInfo.format = format;
     imageInfo.tiling = tiling;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.usage = usage;
-    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.samples = samples;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
     if (vkCreateImage(M_DEVICE, &imageInfo, nullptr, &result.image) != VK_SUCCESS)
@@ -174,13 +179,13 @@ AllocatedImage AlethiaV3::createImage(  uint32_t width, uint32_t height, VkForma
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = result.image;
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.viewType = viewType;
     viewInfo.format = format;
     viewInfo.subresourceRange.aspectMask = aspectFlags;
     viewInfo.subresourceRange.baseMipLevel = 0;
     viewInfo.subresourceRange.levelCount = mipLevels;
     viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = 1;
+    viewInfo.subresourceRange.layerCount = arrayLayers;
 
     if (vkCreateImageView(M_DEVICE, &viewInfo, nullptr, &result.view) != VK_SUCCESS)
     {
