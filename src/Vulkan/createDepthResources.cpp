@@ -1,9 +1,9 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 #include <vector>
 
-VkFormat AlethiaV3::findDepthFormat()
+VkFormat BlackGlass::findDepthFormat()
 {
     const std::vector<VkFormat> candidates = {
         VK_FORMAT_D32_SFLOAT,
@@ -25,7 +25,7 @@ VkFormat AlethiaV3::findDepthFormat()
     throw std::runtime_error("Failed to find a supported depth format!");
 }
 
-void AlethiaV3::createDepthResources()
+void BlackGlass::createDepthResources()
 {
     VkFormat depthFormat = findDepthFormat();
 

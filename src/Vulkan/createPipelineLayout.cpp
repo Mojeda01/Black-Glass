@@ -1,8 +1,8 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 
-void AlethiaV3::createPipelineLayout()
+void BlackGlass::createPipelineLayout()
 {
     std::cout << "  [createPipelineLayout]  Starting ... \n";
 

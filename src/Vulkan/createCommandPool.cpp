@@ -1,8 +1,8 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 
-void AlethiaV3::createCommandPool()
+void BlackGlass::createCommandPool()
 {
     std::cout << "  [createCommandPool] Starting ... \n";
 

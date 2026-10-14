@@ -1,8 +1,8 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 
-void AlethiaV3::createSurface()
+void BlackGlass::createSurface()
 {
     std::cout << " [createSurface] Starting .. \n";
 

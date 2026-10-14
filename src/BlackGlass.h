@@ -269,10 +269,10 @@ const std::vector<const char*> DEVICE_EXTENSIONS =
 // populate the debug messenger.
 void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
 
-class AlethiaV3{
+class BlackGlass{
 public:
-    explicit AlethiaV3(GLFWwindow* window);
-    ~AlethiaV3();
+    explicit BlackGlass(GLFWwindow* window);
+    ~BlackGlass();
 
     void drawFrame();
     void initVulkan();
@@ -418,7 +418,7 @@ private:
     glm::vec2 m_dragOffset{ 0.0f };
     bool m_flyHeld = false;
     std::string m_loadError;
-    char m_modelPathInput[512] = {};
+    std::vector<std::string> m_assetFiles;
     
     // UNIFORMS
     std::vector<AllocatedBuffer> M_UNIFORMBUFFERS;
@@ -456,6 +456,7 @@ private:
     void destroyEffectResources();
     void createIBL();
     void classifyPrimitives(MeshData& mesh);
+    void scanAssets();
     int importAsset(const std::string& path);
     Model* addInstance(int assetIndex, bool autoPlace);
     void removeModel(size_t index);

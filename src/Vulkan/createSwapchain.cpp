@@ -1,4 +1,4 @@
-#include "AlethiaV3.h"
+#include "BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
@@ -61,7 +61,7 @@ VkExtent2D chooseSwapExtent(GLFWwindow* window, const VkSurfaceCapabilitiesKHR& 
 
 } // namespace
 
-void AlethiaV3::createSwapchain()
+void BlackGlass::createSwapchain()
 {
     std::cout << "  [createSwapchain] Starting ... \n";
 

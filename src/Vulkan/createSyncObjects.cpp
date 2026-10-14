@@ -1,8 +1,8 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 
-void AlethiaV3::createSyncObjects()
+void BlackGlass::createSyncObjects()
 {
     std::cout << "  [createSyncObjects] Starting ... \n";
 

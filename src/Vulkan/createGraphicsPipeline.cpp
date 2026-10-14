@@ -1,11 +1,11 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 #include <fstream>
 #include <vector>
 #include <string>
 
-std::vector<char> AlethiaV3::readFile(const std::string& filename)
+std::vector<char> BlackGlass::readFile(const std::string& filename)
 {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
@@ -23,7 +23,7 @@ std::vector<char> AlethiaV3::readFile(const std::string& filename)
     return buffer;
 }
 
-VkShaderModule AlethiaV3::createShaderModule(const std::vector<char>& code)
+VkShaderModule BlackGlass::createShaderModule(const std::vector<char>& code)
 {
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -38,12 +38,12 @@ VkShaderModule AlethiaV3::createShaderModule(const std::vector<char>& code)
     return shaderModule;
 }
 
-void AlethiaV3::createGraphicsPipeline()
+void BlackGlass::createGraphicsPipeline()
 {
     std::cout << "  [createGraphicsPipeline] Starting ... \n";
 
     // load the single slang compiled SPIR-V module
-    std::string shaderPath = std::string(ALETHIA_V3_SHADER_DIR) + "/triangle.spv";
+    std::string shaderPath = std::string(BLACK_GLASS_SHADER_DIR) + "/triangle.spv";
     auto shaderCode = readFile(shaderPath);
     VkShaderModule shaderModule = createShaderModule(shaderCode);
 

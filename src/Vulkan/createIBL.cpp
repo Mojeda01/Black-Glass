@@ -1,4 +1,4 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 #include <cstring>
@@ -78,7 +78,7 @@ bool formatSupports(VkPhysicalDevice device, VkFormat format, VkFormatFeatureFla
 
 }
 
-void AlethiaV3::createIBL()
+void BlackGlass::createIBL()
 {
     std::cout << "  [createIBL] Starting ... \n";
 
@@ -148,7 +148,7 @@ void AlethiaV3::createIBL()
     uint32_t equirectWidth = 0;
     uint32_t equirectHeight = 0;
     {
-        std::string hdrPath = std::string(ALETHIA_V3_ASSET_DIR) + "/environment.hdr";
+        std::string hdrPath = std::string(BLACK_GLASS_ASSET_DIR) + "/environment.hdr";
         if (std::filesystem::exists(hdrPath))
         {
             int width = 0, height = 0, channels = 0;
@@ -224,7 +224,7 @@ void AlethiaV3::createIBL()
         throw std::runtime_error("Failed to create IBL pipeline layout!");
     }
 
-    auto shaderCode = readFile(std::string(ALETHIA_V3_SHADER_DIR) + "/ibl.spv");
+    auto shaderCode = readFile(std::string(BLACK_GLASS_SHADER_DIR) + "/ibl.spv");
     VkShaderModule shaderModule = createShaderModule(shaderCode);
 
     auto makePipeline = [&](const char* entry) -> VkPipeline

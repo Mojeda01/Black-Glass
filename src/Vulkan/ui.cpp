@@ -1,8 +1,10 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <stdexcept>
 
 #include "../imgui/imgui.h"
@@ -35,7 +37,7 @@ const char* const DEBUG_VIEW_NAMES[] = {
 
 }
 
-void AlethiaV3::initImGui()
+void BlackGlass::initImGui()
 {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -85,14 +87,37 @@ void AlethiaV3::initImGui()
     m_settings.sunElevation = glm::degrees(std::asin(dir.y));
     m_settings.sunAzimuth = glm::degrees(std::atan2(dir.z, dir.x));
 
-    std::string defaultPath = std::string(ALETHIA_V3_ASSET_DIR) + "/BoxTextured.glb";
-    std::snprintf(m_modelPathInput, sizeof(m_modelPathInput), "%s", defaultPath.c_str());
+    scanAssets();
 
     m_imguiReady = true;
     std::cout << "  [initImGui] SUCCESS - Dear ImGui ready.\n";
 }
 
-void AlethiaV3::shutdownImGui()
+void BlackGlass::scanAssets()
+{
+    namespace fs = std::filesystem;
+    m_assetFiles.clear();
+
+    std::error_code error;
+    fs::path root(BLACK_GLASS_ASSET_DIR);
+    for (fs::recursive_directory_iterator it(root, error), end; !error && it != end; it.increment(error))
+    {
+        if (!it->is_regular_file())
+        {
+            continue;
+        }
+        std::string extension = it->path().extension().string();
+        std::transform(extension.begin(), extension.end(), extension.begin(),
+                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (extension == ".glb" || extension == ".gltf")
+        {
+            m_assetFiles.push_back(fs::relative(it->path(), root).generic_string());
+        }
+    }
+    std::sort(m_assetFiles.begin(), m_assetFiles.end());
+}
+
+void BlackGlass::shutdownImGui()
 {
     if (!m_imguiReady)
     {
@@ -105,27 +130,27 @@ void AlethiaV3::shutdownImGui()
     m_imguiReady = false;
 }
 
-bool AlethiaV3::uiWantsMouse() const
+bool BlackGlass::uiWantsMouse() const
 {
     return m_imguiReady && m_showUi && ImGui::GetIO().WantCaptureMouse;
 }
 
-bool AlethiaV3::uiWantsKeyboard() const
+bool BlackGlass::uiWantsKeyboard() const
 {
     return m_imguiReady && m_showUi && ImGui::GetIO().WantCaptureKeyboard;
 }
 
-void AlethiaV3::toggleMouseCapture()
+void BlackGlass::toggleMouseCapture()
 {
     setMouseCaptured(!m_mouseCaptured);
 }
 
-void AlethiaV3::toggleUi()
+void BlackGlass::toggleUi()
 {
     m_showUi = !m_showUi;
 }
 
-void AlethiaV3::beginUiFrame()
+void BlackGlass::beginUiFrame()
 {
     if (!m_imguiReady || !m_showUi)
     {
@@ -139,7 +164,7 @@ void AlethiaV3::beginUiFrame()
     ImGui::Render();
 }
 
-void AlethiaV3::buildUi()
+void BlackGlass::buildUi()
 {
     ImGuiIO& io = ImGui::GetIO();
 
@@ -153,12 +178,42 @@ void AlethiaV3::buildUi()
 
     if (ImGui::CollapsingHeader("Model library", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::SetNextItemWidth(320.0f);
-        ImGui::InputText("##modelPath", m_modelPathInput, sizeof(m_modelPathInput));
+        ImGui::TextDisabled("assets/");
         ImGui::SameLine();
-        if (ImGui::Button("Import"))
+        if (ImGui::SmallButton("Rescan"))
         {
-            importAsset(m_modelPathInput);
+            scanAssets();
+        }
+
+        for (size_t i = 0; i < m_assetFiles.size(); i++)
+        {
+            std::string fullPath = std::string(BLACK_GLASS_ASSET_DIR) + "/" + m_assetFiles[i];
+            bool loaded = false;
+            for (const auto& asset : M_LIBRARY)
+            {
+                if (asset->path == fullPath)
+                {
+                    loaded = true;
+                    break;
+                }
+            }
+
+            ImGui::PushID(static_cast<int>(i));
+            ImGui::Text("%s", m_assetFiles[i].c_str());
+            ImGui::SameLine();
+            if (loaded)
+            {
+                ImGui::TextDisabled("loaded");
+            }
+            else if (ImGui::Button("Import"))
+            {
+                importAsset(fullPath);
+            }
+            ImGui::PopID();
+        }
+        if (m_assetFiles.empty())
+        {
+            ImGui::TextDisabled("No .glb or .gltf files found");
         }
         if (!m_loadError.empty())
         {

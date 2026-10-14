@@ -1,4 +1,4 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
@@ -46,7 +46,7 @@ void depthBarrier(VkCommandBuffer commandBuffer, VkImage image,
 
 }
 
-void AlethiaV3::createShadowMap()
+void BlackGlass::createShadowMap()
 {
     std::cout << "  [createShadowMap] Starting ... \n";
 
@@ -98,7 +98,7 @@ void AlethiaV3::createShadowMap()
         throw std::runtime_error("Failed to create shadow pipeline layout!");
     }
 
-    auto shaderCode = readFile(std::string(ALETHIA_V3_SHADER_DIR) + "/shadow.spv");
+    auto shaderCode = readFile(std::string(BLACK_GLASS_SHADER_DIR) + "/shadow.spv");
     VkShaderModule shaderModule = createShaderModule(shaderCode);
 
     VkPipelineShaderStageCreateInfo stage{};
@@ -188,7 +188,7 @@ void AlethiaV3::createShadowMap()
     bakeShadowMap();
 }
 
-void AlethiaV3::bakeShadowMap()
+void BlackGlass::bakeShadowMap()
 {
     glm::vec3 center = (M_SCENEMIN + M_SCENEMAX) * 0.5f;
     float radius = std::max(0.5f * glm::length(M_SCENEMAX - M_SCENEMIN), 0.01f);

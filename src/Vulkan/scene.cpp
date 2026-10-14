@@ -1,4 +1,4 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <algorithm>
 #include <cmath>
@@ -8,7 +8,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
-void AlethiaV3::classifyPrimitives(MeshData& mesh)
+void BlackGlass::classifyPrimitives(MeshData& mesh)
 {
     uint32_t transmissive = 0;
     uint32_t blended = 0;
@@ -50,7 +50,7 @@ void AlethiaV3::classifyPrimitives(MeshData& mesh)
               << blended << " blended primitives.\n";
 }
 
-void AlethiaV3::createGroundModel()
+void BlackGlass::createGroundModel()
 {
     MeshData mesh;
 
@@ -93,7 +93,7 @@ void AlethiaV3::createGroundModel()
     std::cout << "  [createGroundModel] SUCCESS - Ground quad created.\n";
 }
 
-void AlethiaV3::updateModelTransform(Model& model)
+void BlackGlass::updateModelTransform(Model& model)
 {
     const glm::vec3& localMin = model.asset->localMin;
     const glm::vec3& localMax = model.asset->localMax;
@@ -121,7 +121,7 @@ void AlethiaV3::updateModelTransform(Model& model)
     model.worldMax = hi;
 }
 
-void AlethiaV3::placeNewModel(Model& model)
+void BlackGlass::placeNewModel(Model& model)
 {
     float sceneMaxX = std::numeric_limits<float>::lowest();
     bool any = false;
@@ -144,7 +144,7 @@ void AlethiaV3::placeNewModel(Model& model)
     updateModelTransform(model);
 }
 
-void AlethiaV3::refreshScene()
+void BlackGlass::refreshScene()
 {
     glm::vec3 lo(std::numeric_limits<float>::max());
     glm::vec3 hi(std::numeric_limits<float>::lowest());
@@ -200,7 +200,7 @@ void AlethiaV3::refreshScene()
     }
 }
 
-void AlethiaV3::frameScene()
+void BlackGlass::frameScene()
 {
     refreshScene();
 
@@ -218,7 +218,7 @@ void AlethiaV3::frameScene()
     m_camera.position = center - m_camera.front() * distance;
 }
 
-int AlethiaV3::importAsset(const std::string& path)
+int BlackGlass::importAsset(const std::string& path)
 {
     try
     {
@@ -275,7 +275,7 @@ int AlethiaV3::importAsset(const std::string& path)
     }
 }
 
-Model* AlethiaV3::addInstance(int assetIndex, bool autoPlace)
+Model* BlackGlass::addInstance(int assetIndex, bool autoPlace)
 {
     if (assetIndex < 0 || assetIndex >= static_cast<int>(M_LIBRARY.size()))
     {
@@ -310,7 +310,7 @@ Model* AlethiaV3::addInstance(int assetIndex, bool autoPlace)
     return M_MODELS.back().get();
 }
 
-void AlethiaV3::destroyAsset(ModelAsset& asset)
+void BlackGlass::destroyAsset(ModelAsset& asset)
 {
     destroyBuffer(asset.vertexBuffer);
     destroyBuffer(asset.indexBuffer);
@@ -332,7 +332,7 @@ void AlethiaV3::destroyAsset(ModelAsset& asset)
     asset.materials.clear();
 }
 
-void AlethiaV3::removeModel(size_t index)
+void BlackGlass::removeModel(size_t index)
 {
     if (index >= M_MODELS.size())
     {
@@ -354,7 +354,7 @@ void AlethiaV3::removeModel(size_t index)
     m_shadowDirty = true;
 }
 
-void AlethiaV3::removeAsset(size_t index)
+void BlackGlass::removeAsset(size_t index)
 {
     if (index >= M_LIBRARY.size())
     {

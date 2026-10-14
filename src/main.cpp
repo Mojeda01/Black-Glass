@@ -1,6 +1,6 @@
-#include "initv3.h"
+#include "initBlackGlass.h"
 
 int main() {
-    initv3();
+    initBlackGlass();
     return 0;
 }

@@ -1,4 +1,4 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 #include <cstring>
@@ -8,7 +8,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "../stb_image.h"
 
-void AlethiaV3::transitionImageLayoutImmediate( VkImage image,
+void BlackGlass::transitionImageLayoutImmediate( VkImage image,
                                                 VkImageLayout oldLayout,
                                                 VkImageLayout newLayout)
 {
@@ -59,7 +59,7 @@ void AlethiaV3::transitionImageLayoutImmediate( VkImage image,
     endSingleTimeCommands(commandBuffer);
 }
 
-void AlethiaV3::copyBufferToImage(VkBuffer buffer, VkImage image,
+void BlackGlass::copyBufferToImage(VkBuffer buffer, VkImage image,
                                     uint32_t width, uint32_t height)
 {
     VkCommandBuffer commandBuffer = beginSingleTimeCommands();
@@ -115,7 +115,7 @@ namespace
     }
 }
 
-AllocatedImage AlethiaV3::createTextureFromPixels(const unsigned char* pixels,
+AllocatedImage BlackGlass::createTextureFromPixels(const unsigned char* pixels,
                                         int texWidth, int texHeight,
                                         VkFormat format)
 {
@@ -231,13 +231,13 @@ AllocatedImage AlethiaV3::createTextureFromPixels(const unsigned char* pixels,
     return texture;
 }
 
-void AlethiaV3::createFallbackTexture()
+void BlackGlass::createFallbackTexture()
 {
     const unsigned char white[4] = { 255, 255, 255, 255 };
     M_FALLBACKTEXTURE = createTextureFromPixels(white, 1, 1, VK_FORMAT_R8G8B8A8_UNORM);
 }
 
-void AlethiaV3::createModelTextures(ModelAsset& model, const MeshData& mesh)
+void BlackGlass::createModelTextures(ModelAsset& model, const MeshData& mesh)
 {
     for (const SamplerData& data : mesh.samplers)
     {
@@ -271,7 +271,7 @@ void AlethiaV3::createModelTextures(ModelAsset& model, const MeshData& mesh)
     createModelMaterialBuffer(model);
 }
 
-void AlethiaV3::createModelMaterialBuffer(ModelAsset& model)
+void BlackGlass::createModelMaterialBuffer(ModelAsset& model)
 {
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(M_PHYSICALDEVICE, &properties);
@@ -299,7 +299,7 @@ void AlethiaV3::createModelMaterialBuffer(ModelAsset& model)
                 << " materials uploaded.\n";
 }
 
-VkSampler AlethiaV3::createSamplerObject(const SamplerData& data)
+VkSampler BlackGlass::createSamplerObject(const SamplerData& data)
 {
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(M_PHYSICALDEVICE, &properties);
@@ -329,7 +329,7 @@ VkSampler AlethiaV3::createSamplerObject(const SamplerData& data)
     return sampler;
 }
 
-void AlethiaV3::createTextureSampler()
+void BlackGlass::createTextureSampler()
 {
     M_TEXTURESAMPLER = createSamplerObject(SamplerData{});
     std::cout << "  [createTextureSampler] SUCCESS - Default sampler created.\n";

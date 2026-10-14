@@ -5,13 +5,13 @@
 #include <stdexcept>
 #include <GLFW/glfw3.h>
 
-#include "AlethiaV3.h"
+#include "BlackGlass.h"
 
-class V3Window {
+class BlackGlassWindow {
 public:
-    V3Window(int width = 1280, int height = 720,
-             const char* title = "Alethia v3");
-    ~V3Window();
+    BlackGlassWindow(int width = 1280, int height = 720,
+             const char* title = "Black Glass");
+    ~BlackGlassWindow();
 
     GLFWwindow* get() const { return m_window; }
     bool shouldClose() const;
@@ -23,7 +23,7 @@ private:
     int m_height;
 };
 
-V3Window::V3Window(int width, int height, const char* title)
+BlackGlassWindow::BlackGlassWindow(int width, int height, const char* title)
     : m_width(width), m_height(height)
 {
     if (!glfwInit()) {
@@ -41,45 +41,45 @@ V3Window::V3Window(int width, int height, const char* title)
 
 }
 
-V3Window::~V3Window() {
+BlackGlassWindow::~BlackGlassWindow() {
     if (m_window) glfwDestroyWindow(m_window);
     glfwTerminate();
 }
 
-bool V3Window::shouldClose() const {
+bool BlackGlassWindow::shouldClose() const {
     return glfwWindowShouldClose(m_window);
 }
 
-void V3Window::pollEvents() {
+void BlackGlassWindow::pollEvents() {
     glfwPollEvents();
 }
 
-void initv3() {
-    std::cout << "Alethia v3 initialization started.\n";
+void initBlackGlass() {
+    std::cout << "Black Glass initialization started.\n";
 
     try {
-        V3Window window(1280, 720, "Alethia v3");
+        BlackGlassWindow window(1280, 720, "Black Glass");
         std::cout << "GLFW window created successfully.\n";
 
-        AlethiaV3 renderer(window.get());
+        BlackGlass renderer(window.get());
         renderer.initVulkan();
 
         glfwSetWindowUserPointer(window.get(), &renderer);
         glfwSetFramebufferSizeCallback(window.get(),
             [](GLFWwindow* w, int, int) {
-                auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
+                auto* r = static_cast<BlackGlass*>(glfwGetWindowUserPointer(w));
                 if (r) r->setFramebufferResized();
             });
         
         glfwSetWindowFocusCallback(window.get(),
                 [](GLFWwindow* w, int focused) {
-                    auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
+                    auto* r = static_cast<BlackGlass*>(glfwGetWindowUserPointer(w));
                     if (r && !focused) r->setMouseCaptured(false);
                 });
 
         glfwSetMouseButtonCallback(window.get(),
                 [](GLFWwindow* w, int button, int action, int mods) {
-                    auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
+                    auto* r = static_cast<BlackGlass*>(glfwGetWindowUserPointer(w));
                     if (!r)
                     {
                         return;
@@ -104,13 +104,13 @@ void initv3() {
 
         glfwSetScrollCallback(window.get(),
                 [](GLFWwindow* w, double, double yoffset) {
-                    auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
+                    auto* r = static_cast<BlackGlass*>(glfwGetWindowUserPointer(w));
                     if (r) r->onScroll(yoffset);
                 });
 
         glfwSetCursorPosCallback(window.get(),
                 [](GLFWwindow* w, double xpos, double ypos) {
-                    auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
+                    auto* r = static_cast<BlackGlass*>(glfwGetWindowUserPointer(w));
                     if (r) r->onMouseMove(xpos, ypos);
                 });
 
@@ -121,7 +121,7 @@ void initv3() {
                         glfwSetWindowShouldClose(w, GLFW_TRUE);
                     }
 
-                    auto* r = static_cast<AlethiaV3*>(glfwGetWindowUserPointer(w));
+                    auto* r = static_cast<BlackGlass*>(glfwGetWindowUserPointer(w));
                     if (r && action == GLFW_PRESS && key == GLFW_KEY_TAB)
                     {
                         r->toggleMouseCapture();

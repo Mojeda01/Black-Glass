@@ -1,4 +1,4 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 
@@ -36,7 +36,7 @@ void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& create
     createInfo.pfnUserCallback = debugCallback;
 }
 
-void AlethiaV3::setupDebugMessenger()
+void BlackGlass::setupDebugMessenger()
 {
     std::cout << " [setupDebugMessenger] Starting ... \n";
 

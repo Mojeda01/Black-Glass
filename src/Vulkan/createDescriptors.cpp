@@ -1,4 +1,4 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 #include <cstring>
@@ -7,7 +7,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
-void AlethiaV3::createDescriptorSetLayout()
+void BlackGlass::createDescriptorSetLayout()
 {
     std::array<VkDescriptorSetLayoutBinding, GRAPHICS_BINDING_COUNT> bindings{};
 
@@ -79,7 +79,7 @@ void AlethiaV3::createDescriptorSetLayout()
     std::cout << "  [createDescriptorSetLayout] SUCCESS - Push descriptor layout created.\n";
 }
 
-void AlethiaV3::createUniformBuffers()
+void BlackGlass::createUniformBuffers()
 {
     VkDeviceSize bufferSize = sizeof(UniformBufferObject);
     M_UNIFORMBUFFERS.resize(MAX_FRAMES_IN_FLIGHT);
@@ -105,7 +105,7 @@ void AlethiaV3::createUniformBuffers()
                     << " uniform buffers mapped.\n";
 }
 
-void AlethiaV3::setMouseCaptured(bool captured)
+void BlackGlass::setMouseCaptured(bool captured)
 {
     m_mouseCaptured = captured;
     glfwSetInputMode(m_window, GLFW_CURSOR, captured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
@@ -115,7 +115,7 @@ void AlethiaV3::setMouseCaptured(bool captured)
     }
 }
 
-void AlethiaV3::onMouseMove(double xpos, double ypos)
+void BlackGlass::onMouseMove(double xpos, double ypos)
 {
     if (!m_mouseCaptured)
     {
@@ -138,7 +138,7 @@ void AlethiaV3::onMouseMove(double xpos, double ypos)
     m_camera.processMouse(deltaX, deltaY);
 }
 
-void AlethiaV3::updateUniformBuffer(uint32_t currentImage)
+void BlackGlass::updateUniformBuffer(uint32_t currentImage)
 {
     auto currentTime = std::chrono::high_resolution_clock::now(); 
     static auto startTime = currentTime;

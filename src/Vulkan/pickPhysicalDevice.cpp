@@ -1,4 +1,4 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -29,7 +29,7 @@ bool checkDeviceExtensionSupport(VkPhysicalDevice device)
 
 } // namespace
 
-QueueFamilyIndices AlethiaV3::findQueueFamilies(VkPhysicalDevice device)
+QueueFamilyIndices BlackGlass::findQueueFamilies(VkPhysicalDevice device)
 {
     QueueFamilyIndices indices;
 
@@ -64,7 +64,7 @@ QueueFamilyIndices AlethiaV3::findQueueFamilies(VkPhysicalDevice device)
     return indices;
 }
 
-SwapchainSupportDetails AlethiaV3::querySwapchainSupport(VkPhysicalDevice device)
+SwapchainSupportDetails BlackGlass::querySwapchainSupport(VkPhysicalDevice device)
 {
     SwapchainSupportDetails details;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, M_SURFACE, &details.capabilities);
@@ -128,7 +128,7 @@ int rateDeviceSuitability(VkPhysicalDevice device, const QueueFamilyIndices& ind
 
 } // namespace.
 
-void AlethiaV3::pickPhysicalDevice()
+void BlackGlass::pickPhysicalDevice()
 {
     std::cout << "  [pickPhysicalDevice] Starting...\n";
 

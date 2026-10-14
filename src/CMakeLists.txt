@@ -27,11 +27,11 @@ foreach(SHADER ${V3_SHADERS})
 endforeach()
 
 
-add_custom_target(AlethiaV3Shaders DEPENDS ${V3_SPV_FILES})
+add_custom_target(BlackGlassShaders DEPENDS ${V3_SPV_FILES})
 
-add_library(alethia_v3 STATIC
-    initv3.cpp
-    AlethiaV3.cpp
+add_library(black_glass_engine STATIC
+    initBlackGlass.cpp
+    BlackGlass.cpp
     Vulkan/createInstance.cpp
     Vulkan/debugMessenger.cpp
     Vulkan/createSurface.cpp
@@ -69,35 +69,40 @@ add_library(alethia_v3 STATIC
     initVulkan.cpp
 )
 
-target_include_directories(alethia_v3 PUBLIC
+target_include_directories(black_glass_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
 )
 
-target_link_libraries(alethia_v3 PUBLIC
+target_link_libraries(black_glass_engine PUBLIC
     Vulkan::Vulkan
     glfw
 )
 
 if(APPLE)
-    target_link_libraries(alethia_v3 PUBLIC
+    target_link_libraries(black_glass_engine PUBLIC
         "-framework Metal"
         "-framework Foundation"
         "-framework QuartzCore"
         "-framework CoreGraphics"
         "-framework IOSurface"
     )
-    target_compile_definitions(alethia_v3 PRIVATE MVK_CONFIG_LOG_LEVEL=1)
+    target_compile_definitions(black_glass_engine PRIVATE MVK_CONFIG_LOG_LEVEL=1)
 endif()
 
-target_compile_definitions(alethia_v3 PRIVATE
-    ALETHIA_V3_SHADER_DIR="${V3_SHADER_BIN_DIR}"
-    ALETHIA_V3_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets"
+target_compile_definitions(black_glass_engine PRIVATE
+    BLACK_GLASS_SHADER_DIR="${V3_SHADER_BIN_DIR}"
+    BLACK_GLASS_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets"
 )
 
-target_compile_definitions(alethia_v3 PUBLIC
+target_compile_definitions(black_glass_engine PUBLIC
     GLM_FORCE_DEPTH_ZERO_TO_ONE
     GLM_FORCE_RADIANS
 )
 
-add_dependencies(alethia_v3 AlethiaV3Shaders)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(black_glass_engine PRIVATE -Wno-nullability-completeness)
+    set_source_files_properties(Vulkan/loadGltf.cpp PROPERTIES COMPILE_OPTIONS "-Wno-switch")
+endif()
+
+add_dependencies(black_glass_engine BlackGlassShaders)

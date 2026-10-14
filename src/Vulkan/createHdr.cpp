@@ -1,11 +1,11 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
 #include <cmath>
 #include <string>
 
-void AlethiaV3::pickMsaaSamples()
+void BlackGlass::pickMsaaSamples()
 {
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(M_PHYSICALDEVICE, &properties);
@@ -29,7 +29,7 @@ void AlethiaV3::pickMsaaSamples()
     std::cout << "  [pickMsaaSamples] Using " << static_cast<int>(M_MSAASAMPLES) << "x MSAA.\n";
 }
 
-void AlethiaV3::createHdrResources()
+void BlackGlass::createHdrResources()
 {
     const uint32_t width = M_SWAPCHAINEXTENT.width;
     const uint32_t height = M_SWAPCHAINEXTENT.height;
@@ -107,7 +107,7 @@ void AlethiaV3::createHdrResources()
               << M_BLOOMIMAGES.size() << " bloom levels.\n";
 }
 
-void AlethiaV3::destroyHdrResources()
+void BlackGlass::destroyHdrResources()
 {
     for (auto& image : M_BLOOMIMAGES)
     {
@@ -119,7 +119,7 @@ void AlethiaV3::destroyHdrResources()
     destroyImage(M_SCENECOPY);
 }
 
-void AlethiaV3::createPostResources()
+void BlackGlass::createPostResources()
 {
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -179,7 +179,7 @@ void AlethiaV3::createPostResources()
         throw std::runtime_error("Failed to create post-process pipeline layout!");
     }
 
-    auto shaderCode = readFile(std::string(ALETHIA_V3_SHADER_DIR) + "/post.spv");
+    auto shaderCode = readFile(std::string(BLACK_GLASS_SHADER_DIR) + "/post.spv");
     VkShaderModule shaderModule = createShaderModule(shaderCode);
 
     auto build = [&](const char* fragmentEntry, VkFormat colorFormat, bool additive) -> VkPipeline
@@ -278,13 +278,13 @@ void AlethiaV3::createPostResources()
     std::cout << "  [createPostResources] SUCCESS - Bloom and composite pipelines created.\n";
 }
 
-void AlethiaV3::adjustExposure(float stops)
+void BlackGlass::adjustExposure(float stops)
 {
     m_settings.exposure = std::clamp(m_settings.exposure * std::exp2(stops), 0.05f, 16.0f);
     std::cout << "[exposure] " << m_settings.exposure << "\n";
 }
 
-void AlethiaV3::toggleBloom()
+void BlackGlass::toggleBloom()
 {
     m_settings.bloom = !m_settings.bloom;
     std::cout << "[bloom] " << (m_settings.bloom ? "on" : "off") << "\n";

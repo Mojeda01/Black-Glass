@@ -1,10 +1,10 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
 #include <string>
 
-void AlethiaV3::createEffectResources()
+void BlackGlass::createEffectResources()
 {
     const uint32_t width = M_SWAPCHAINEXTENT.width;
     const uint32_t height = M_SWAPCHAINEXTENT.height;
@@ -77,7 +77,7 @@ void AlethiaV3::createEffectResources()
     std::cout << "  [createEffectResources] SUCCESS - SSAO and reflection targets created.\n";
 }
 
-void AlethiaV3::destroyEffectResources()
+void BlackGlass::destroyEffectResources()
 {
     destroyImage(M_PREPASSDEPTH);
     destroyImage(M_AORAW);
@@ -87,7 +87,7 @@ void AlethiaV3::destroyEffectResources()
     destroyImage(M_REFLDEPTH);
 }
 
-void AlethiaV3::createEffectPipelines()
+void BlackGlass::createEffectPipelines()
 {
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -168,7 +168,7 @@ void AlethiaV3::createEffectPipelines()
     dynamicState.pDynamicStates = dynamicStates;
 
     {
-        auto shaderCode = readFile(std::string(ALETHIA_V3_SHADER_DIR) + "/ssao.spv");
+        auto shaderCode = readFile(std::string(BLACK_GLASS_SHADER_DIR) + "/ssao.spv");
         VkShaderModule shaderModule = createShaderModule(shaderCode);
 
         auto build = [&](const char* fragmentEntry) -> VkPipeline
@@ -229,7 +229,7 @@ void AlethiaV3::createEffectPipelines()
     }
 
     {
-        auto shaderCode = readFile(std::string(ALETHIA_V3_SHADER_DIR) + "/triangle.spv");
+        auto shaderCode = readFile(std::string(BLACK_GLASS_SHADER_DIR) + "/triangle.spv");
         VkShaderModule shaderModule = createShaderModule(shaderCode);
 
         VkPipelineShaderStageCreateInfo stage{};

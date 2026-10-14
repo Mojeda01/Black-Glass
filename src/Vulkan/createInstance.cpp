@@ -1,10 +1,10 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 #include <vector>
 #include <cstring>
 
-void AlethiaV3::createInstance() 
+void BlackGlass::createInstance() 
 {
     std::cout << " [createInstance] Starting... \n"; 
  

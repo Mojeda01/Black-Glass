@@ -1,23 +1,23 @@
-#include "AlethiaV3.h"
+#include "BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 
 // Constructor
-AlethiaV3::AlethiaV3(GLFWwindow* window) 
+BlackGlass::BlackGlass(GLFWwindow* window) 
     : m_window(window)
 {
-    std::cout << "[AlethiaV3] Constructor called\n"; 
+    std::cout << "[BlackGlass] Constructor called\n"; 
 }
 
 // Destructor
-AlethiaV3::~AlethiaV3()
+BlackGlass::~BlackGlass()
 {
-    std::cout << "[AlethiaV3] Destructor called\n";
+    std::cout << "[BlackGlass] Destructor called\n";
     cleanup();
 }
 
 
-void AlethiaV3::drawFrame()
+void BlackGlass::drawFrame()
 {
     // wait for the GPU to finish with this frame-in-flight slot's resources
     // before reusing its command buffer.
@@ -99,7 +99,7 @@ void AlethiaV3::drawFrame()
     M_CURRENTFRAME = (M_CURRENTFRAME + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void AlethiaV3::cleanup()
+void BlackGlass::cleanup()
 {
     std::cout << "  [cleanup] Starting ... \n";
 

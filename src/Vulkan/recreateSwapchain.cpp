@@ -1,8 +1,8 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 
-void AlethiaV3::cleanupSwapchain()
+void BlackGlass::cleanupSwapchain()
 {
     destroyHdrResources();
     destroyEffectResources();
@@ -27,7 +27,7 @@ void AlethiaV3::cleanupSwapchain()
     }
 }
 
-void AlethiaV3::recreateSwapchain()
+void BlackGlass::recreateSwapchain()
 {
     int width = 0, height = 0;
     glfwGetFramebufferSize(m_window, &width, &height);

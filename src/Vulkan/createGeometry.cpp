@@ -1,9 +1,9 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <cstring>
 #include <vector>
 
-void AlethiaV3::uploadModelGeometry(ModelAsset& model, const MeshData& mesh)
+void BlackGlass::uploadModelGeometry(ModelAsset& model, const MeshData& mesh)
 {
     auto upload = [&](const void* data, VkDeviceSize size, VkBufferUsageFlags usage) -> AllocatedBuffer
     {

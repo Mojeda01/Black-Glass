@@ -1,8 +1,8 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 
-void AlethiaV3::createAllocator()
+void BlackGlass::createAllocator()
 {
     VmaAllocatorCreateInfo allocatorInfo{};
     allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT |
@@ -20,7 +20,7 @@ void AlethiaV3::createAllocator()
     std::cout << "  [createAllocator] SUCCESS - VMA allocator created.\n";
 }
 
-void AlethiaV3::destroyAllocator()
+void BlackGlass::destroyAllocator()
 {
     if (M_ALLOCATOR != VK_NULL_HANDLE)
     {
@@ -29,7 +29,7 @@ void AlethiaV3::destroyAllocator()
     }
 }
 
-AllocatedBuffer AlethiaV3::createBuffer(    VkDeviceSize size,
+AllocatedBuffer BlackGlass::createBuffer(    VkDeviceSize size,
                                             VkBufferUsageFlags usage,
                                             VkMemoryPropertyFlags properties)
 {
@@ -62,7 +62,7 @@ AllocatedBuffer AlethiaV3::createBuffer(    VkDeviceSize size,
     return result;
 }
 
-void AlethiaV3::destroyBuffer(AllocatedBuffer& buffer)
+void BlackGlass::destroyBuffer(AllocatedBuffer& buffer)
 {
     if (buffer.buffer != VK_NULL_HANDLE)
     {
@@ -74,7 +74,7 @@ void AlethiaV3::destroyBuffer(AllocatedBuffer& buffer)
     buffer.size = 0;
 }
 
-VkCommandBuffer AlethiaV3::beginSingleTimeCommands()
+VkCommandBuffer BlackGlass::beginSingleTimeCommands()
 {
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -95,7 +95,7 @@ VkCommandBuffer AlethiaV3::beginSingleTimeCommands()
     return commandBuffer;
 }
 
-void AlethiaV3::endSingleTimeCommands(VkCommandBuffer commandBuffer)
+void BlackGlass::endSingleTimeCommands(VkCommandBuffer commandBuffer)
 {
     vkEndCommandBuffer(commandBuffer);
 
@@ -109,7 +109,7 @@ void AlethiaV3::endSingleTimeCommands(VkCommandBuffer commandBuffer)
     vkFreeCommandBuffers(M_DEVICE, M_COMMANDPOOL, 1, &commandBuffer);
 }
 
-void AlethiaV3::copyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size)
+void BlackGlass::copyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size)
 {
     VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
@@ -119,7 +119,7 @@ void AlethiaV3::copyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size)
     endSingleTimeCommands(commandBuffer);
 }
 
-AllocatedImage AlethiaV3::createImage(  uint32_t width, uint32_t height, VkFormat format,
+AllocatedImage BlackGlass::createImage(  uint32_t width, uint32_t height, VkFormat format,
                                         VkImageTiling tiling, VkImageUsageFlags usage,
                                         VkMemoryPropertyFlags properties,
                                         VkImageAspectFlags aspectFlags,
@@ -182,7 +182,7 @@ AllocatedImage AlethiaV3::createImage(  uint32_t width, uint32_t height, VkForma
     return result;
 }
 
-void AlethiaV3::destroyImage(AllocatedImage& image)
+void BlackGlass::destroyImage(AllocatedImage& image)
 {
    if (image.view != VK_NULL_HANDLE)
    {

@@ -1,10 +1,10 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 #include <set>
 #include <vector>
 
-void AlethiaV3::createLogicalDevice()
+void BlackGlass::createLogicalDevice()
 {
     std::cout << "  [createLogicalDevice] Starting... \n";
     QueueFamilyIndices indices = findQueueFamilies(M_PHYSICALDEVICE);

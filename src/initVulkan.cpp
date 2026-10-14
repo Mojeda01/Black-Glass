@@ -1,12 +1,12 @@
-#include "AlethiaV3.h"
+#include "BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 #include <vector>
 #include <cstring>
 
-void AlethiaV3::initVulkan()
+void BlackGlass::initVulkan()
 {
-    std::cout << "[AlethiaV3::initVulkan()]:: Started \n";
+    std::cout << "[BlackGlass::initVulkan()]:: Started \n";
 
     std::cout << "→ createInstance()\n";
     createInstance();
@@ -55,7 +55,7 @@ void AlethiaV3::initVulkan()
     createGroundModel();
 
     std::cout << "→ importAsset()\n";
-    int defaultAsset = importAsset(std::string(ALETHIA_V3_ASSET_DIR) + "/CarConcept.glb");
+    int defaultAsset = importAsset(std::string(BLACK_GLASS_ASSET_DIR) + "/CarConcept.glb");
     if (defaultAsset < 0)
     {
         throw std::runtime_error("Failed to load the default model: " + m_loadError);

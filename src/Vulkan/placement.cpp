@@ -1,4 +1,4 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -58,7 +58,7 @@ bool intersectGround(const glm::vec3& origin, const glm::vec3& direction, float 
 
 }
 
-bool AlethiaV3::cursorRay(glm::vec3& origin, glm::vec3& direction) const
+bool BlackGlass::cursorRay(glm::vec3& origin, glm::vec3& direction) const
 {
     int windowWidth = 0;
     int windowHeight = 0;
@@ -91,7 +91,7 @@ bool AlethiaV3::cursorRay(glm::vec3& origin, glm::vec3& direction) const
     return true;
 }
 
-Model* AlethiaV3::pickModel(const glm::vec3& origin, const glm::vec3& direction, float& distance)
+Model* BlackGlass::pickModel(const glm::vec3& origin, const glm::vec3& direction, float& distance)
 {
     Model* best = nullptr;
     float bestDistance = std::numeric_limits<float>::max();
@@ -112,7 +112,7 @@ Model* AlethiaV3::pickModel(const glm::vec3& origin, const glm::vec3& direction,
     return best;
 }
 
-void AlethiaV3::beginPlacement(int assetIndex)
+void BlackGlass::beginPlacement(int assetIndex)
 {
     cancelPlacement();
     if (assetIndex < 0 || assetIndex >= static_cast<int>(M_LIBRARY.size()))
@@ -130,7 +130,7 @@ void AlethiaV3::beginPlacement(int assetIndex)
     }
 }
 
-void AlethiaV3::cancelPlacement()
+void BlackGlass::cancelPlacement()
 {
     if (m_ghost)
     {
@@ -147,7 +147,7 @@ void AlethiaV3::cancelPlacement()
     m_placingAsset = -1;
 }
 
-void AlethiaV3::updateInteraction()
+void BlackGlass::updateInteraction()
 {
     const bool cursorFree = !m_mouseCaptured && !uiWantsMouse();
 
@@ -185,7 +185,7 @@ void AlethiaV3::updateInteraction()
     }
 }
 
-void AlethiaV3::onLeftPress(bool shiftHeld)
+void BlackGlass::onLeftPress(bool shiftHeld)
 {
     if (m_mouseCaptured || uiWantsMouse())
     {
@@ -237,7 +237,7 @@ void AlethiaV3::onLeftPress(bool shiftHeld)
     }
 }
 
-void AlethiaV3::onLeftRelease()
+void BlackGlass::onLeftRelease()
 {
     if (m_dragging)
     {
@@ -246,7 +246,7 @@ void AlethiaV3::onLeftRelease()
     }
 }
 
-void AlethiaV3::onRightPress()
+void BlackGlass::onRightPress()
 {
     if (!uiWantsMouse() && !m_mouseCaptured)
     {
@@ -255,7 +255,7 @@ void AlethiaV3::onRightPress()
     }
 }
 
-void AlethiaV3::onRightRelease()
+void BlackGlass::onRightRelease()
 {
     if (m_flyHeld)
     {
@@ -264,7 +264,7 @@ void AlethiaV3::onRightRelease()
     }
 }
 
-void AlethiaV3::onScroll(double delta)
+void BlackGlass::onScroll(double delta)
 {
     if (uiWantsMouse())
     {
@@ -293,7 +293,7 @@ void AlethiaV3::onScroll(double delta)
     }
 }
 
-void AlethiaV3::deleteSelected()
+void BlackGlass::deleteSelected()
 {
     if (m_ghost)
     {

@@ -1,4 +1,4 @@
-#include "../AlethiaV3.h"
+#include "../BlackGlass.h"
 #include <iostream>
 #include <stdexcept>
 #include <functional>
@@ -365,7 +365,7 @@ namespace
     }
 }   // namespace
 
-MeshData AlethiaV3::loadGltf(const std::string& path)
+MeshData BlackGlass::loadGltf(const std::string& path)
 {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
