@@ -82,8 +82,8 @@ void AlethiaV3::initImGui()
     }
 
     glm::vec3 dir = glm::normalize(M_LIGHTDIR);
-    m_sunElevation = glm::degrees(std::asin(dir.y));
-    m_sunAzimuth = glm::degrees(std::atan2(dir.z, dir.x));
+    m_settings.sunElevation = glm::degrees(std::asin(dir.y));
+    m_settings.sunAzimuth = glm::degrees(std::atan2(dir.z, dir.x));
 
     std::string defaultPath = std::string(ALETHIA_V3_ASSET_DIR) + "/BoxTextured.glb";
     std::snprintf(m_modelPathInput, sizeof(m_modelPathInput), "%s", defaultPath.c_str());
@@ -215,11 +215,11 @@ void AlethiaV3::buildUi()
     if (ImGui::CollapsingHeader("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
     {
         bool lightChanged = false;
-        lightChanged |= ImGui::SliderFloat("Sun azimuth", &m_sunAzimuth, -180.0f, 180.0f, "%.0f deg");
-        lightChanged |= ImGui::SliderFloat("Sun elevation", &m_sunElevation, 5.0f, 90.0f, "%.0f deg");
-        ImGui::SliderFloat("Sun intensity", &m_sunIntensity, 0.0f, 10.0f, "%.2f");
-        ImGui::SliderFloat("Environment", &m_envIntensity, 0.0f, 4.0f, "%.2f");
-        ImGui::Checkbox("Shadows", &m_shadowsEnabled);
+        lightChanged |= ImGui::SliderFloat("Sun azimuth", &m_settings.sunAzimuth, -180.0f, 180.0f, "%.0f deg");
+        lightChanged |= ImGui::SliderFloat("Sun elevation", &m_settings.sunElevation, 5.0f, 90.0f, "%.0f deg");
+        ImGui::SliderFloat("Sun intensity", &m_settings.sunIntensity, 0.0f, 10.0f, "%.2f");
+        ImGui::SliderFloat("Environment", &m_settings.envIntensity, 0.0f, 4.0f, "%.2f");
+        ImGui::Checkbox("Shadows", &m_settings.shadows);
         if (M_IBLFROMFILE)
         {
             ImGui::TextDisabled("Sun is off while an HDR environment is loaded");
@@ -227,8 +227,8 @@ void AlethiaV3::buildUi()
 
         if (lightChanged)
         {
-            float azimuth = glm::radians(m_sunAzimuth);
-            float elevation = glm::radians(m_sunElevation);
+            float azimuth = glm::radians(m_settings.sunAzimuth);
+            float elevation = glm::radians(m_settings.sunElevation);
             M_LIGHTDIR = glm::vec3(std::cos(elevation) * std::cos(azimuth),
                                    std::sin(elevation),
                                    std::cos(elevation) * std::sin(azimuth));
@@ -236,15 +236,26 @@ void AlethiaV3::buildUi()
         }
     }
 
+    if (ImGui::CollapsingHeader("Effects", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Checkbox("SSAO", &m_settings.ssao);
+        ImGui::SliderFloat("SSAO radius", &m_settings.ssaoRadius, 0.1f, 3.0f, "%.2f");
+        ImGui::SliderFloat("SSAO intensity", &m_settings.ssaoIntensity, 0.2f, 3.0f, "%.2f");
+        ImGui::Checkbox("Floor reflections", &m_settings.reflections);
+        ImGui::SliderFloat("Reflection strength", &m_settings.reflectionStrength, 0.0f, 6.0f, "%.2f");
+        ImGui::SliderFloat("Floor roughness", &m_settings.floorRoughness, 0.05f, 1.0f, "%.2f");
+    }
+
     if (ImGui::CollapsingHeader("Post-processing", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        float stops = std::log2(m_exposure);
+        float stops = std::log2(m_settings.exposure);
         if (ImGui::SliderFloat("Exposure (EV)", &stops, -4.0f, 4.0f, "%.2f"))
         {
-            m_exposure = std::exp2(stops);
+            m_settings.exposure = std::exp2(stops);
         }
-        ImGui::Checkbox("Bloom", &m_bloomEnabled);
-        ImGui::SliderFloat("Bloom strength", &m_bloomStrength, 0.0f, 0.3f, "%.3f");
+        ImGui::Combo("Tonemapper", &m_settings.tonemapper, TONEMAPPER_NAMES, TONEMAPPER_COUNT);
+        ImGui::Checkbox("Bloom", &m_settings.bloom);
+        ImGui::SliderFloat("Bloom strength", &m_settings.bloomStrength, 0.0f, 0.3f, "%.3f");
     }
 
     if (ImGui::CollapsingHeader("Debug view", ImGuiTreeNodeFlags_DefaultOpen))

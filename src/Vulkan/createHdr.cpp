@@ -280,12 +280,12 @@ void AlethiaV3::createPostResources()
 
 void AlethiaV3::adjustExposure(float stops)
 {
-    m_exposure = std::clamp(m_exposure * std::exp2(stops), 0.05f, 16.0f);
-    std::cout << "[exposure] " << m_exposure << "\n";
+    m_settings.exposure = std::clamp(m_settings.exposure * std::exp2(stops), 0.05f, 16.0f);
+    std::cout << "[exposure] " << m_settings.exposure << "\n";
 }
 
 void AlethiaV3::toggleBloom()
 {
-    m_bloomEnabled = !m_bloomEnabled;
-    std::cout << "[bloom] " << (m_bloomEnabled ? "on" : "off") << "\n";
+    m_settings.bloom = !m_settings.bloom;
+    std::cout << "[bloom] " << (m_settings.bloom ? "on" : "off") << "\n";
 }

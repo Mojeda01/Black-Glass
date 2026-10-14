@@ -44,6 +44,9 @@ void AlethiaV3::initVulkan()
     std::cout << "→ createHdrResources()\n";
     createHdrResources();
 
+    std::cout << "→ createEffectResources()\n";
+    createEffectResources();
+
     std::cout << "→ createTextureSampler()\n";
     createTextureSampler();
     createFallbackTexture();
@@ -81,6 +84,9 @@ void AlethiaV3::initVulkan()
 
     std::cout << "→ createPostResources()\n";
     createPostResources();
+
+    std::cout << "→ createEffectPipelines()\n";
+    createEffectPipelines();
 
     std::cout << "→ createShadowMap()\n";
     refreshScene();

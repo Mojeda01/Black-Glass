@@ -5,6 +5,7 @@
 void AlethiaV3::cleanupSwapchain()
 {
     destroyHdrResources();
+    destroyEffectResources();
     destroyImage(M_DEPTHIMAGE);
     
     for (VkImageView imageView : M_SWAPCHAINIMAGEVIEWS)
@@ -44,6 +45,7 @@ void AlethiaV3::recreateSwapchain()
     createImageViews();
     createDepthResources();
     createHdrResources();
+    createEffectResources();
 
     VkSemaphoreCreateInfo semaphoreInfo{};
     semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;

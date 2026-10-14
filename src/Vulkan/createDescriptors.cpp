@@ -48,6 +48,14 @@ void AlethiaV3::createDescriptorSetLayout()
     bindings[SCENE_COLOR_BINDING_INDEX].descriptorCount = 1;
     bindings[SCENE_COLOR_BINDING_INDEX].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
+    for (uint32_t index : { AO_BINDING_INDEX, REFLECTION_BINDING_INDEX })
+    {
+        bindings[index].binding = index;
+        bindings[index].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        bindings[index].descriptorCount = 1;
+        bindings[index].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    }
+
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
@@ -76,8 +84,15 @@ void AlethiaV3::createUniformBuffers()
     VkDeviceSize bufferSize = sizeof(UniformBufferObject);
     M_UNIFORMBUFFERS.resize(MAX_FRAMES_IN_FLIGHT);
     M_UNIFORMBUFFERSMAPPED.resize(MAX_FRAMES_IN_FLIGHT);
+    M_REFLUNIFORMBUFFERS.resize(MAX_FRAMES_IN_FLIGHT);
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
+        M_REFLUNIFORMBUFFERS[i] = createBuffer(
+            bufferSize,
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+        );
+
         M_UNIFORMBUFFERS[i] = createBuffer(
             bufferSize,
             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -150,8 +165,8 @@ void AlethiaV3::updateUniformBuffer(uint32_t currentImage)
     ubo.invViewProj = glm::inverse(ubo.proj * ubo.view);
 
     ubo.lightViewProj = M_LIGHTVIEWPROJ;
-    ubo.lightDir = glm::vec4(glm::normalize(M_LIGHTDIR), m_sunIntensity);
-    ubo.shadowParams = glm::vec4(1.0f / static_cast<float>(SHADOW_MAP_SIZE), M_SHADOWNORMALBIAS, m_shadowsEnabled ? 1.0f : 0.0f, 0.0f);
+    ubo.lightDir = glm::vec4(glm::normalize(M_LIGHTDIR), m_settings.sunIntensity);
+    ubo.shadowParams = glm::vec4(1.0f / static_cast<float>(SHADOW_MAP_SIZE), M_SHADOWNORMALBIAS, m_settings.shadows ? 1.0f : 0.0f, 0.0f);
     ubo.groundParams = M_GROUNDPARAMS;
     ubo.groundExtent = M_GROUNDEXTENT;
     for (uint32_t i = 0; i < GROUND_BOX_MAX; i++)
@@ -164,9 +179,34 @@ void AlethiaV3::updateUniformBuffer(uint32_t currentImage)
                                 static_cast<float>(M_SCENECOPYMIPS - 1),
                                 static_cast<float>(M_SWAPCHAINEXTENT.width),
                                 static_cast<float>(M_SWAPCHAINEXTENT.height));
-    ubo.iblParams = glm::vec4(M_IBLMAXMIP, m_envIntensity, M_IBLFROMFILE ? 0.0f : 1.0f, 0.0f);
+    ubo.iblParams = glm::vec4(M_IBLMAXMIP, m_settings.envIntensity, M_IBLFROMFILE ? 0.0f : 1.0f, 0.0f);
+
+    float groundY = M_GROUNDEXTENT.z;
+    m_ssaoActive = m_settings.ssao && M_PREPASSDEPTH.image != VK_NULL_HANDLE;
+    m_reflectionActive = m_settings.reflections && m_debugView == 0 && M_GROUND != nullptr
+                            && M_REFLCOLOR.image != VK_NULL_HANDLE
+                            && m_camera.position.y > groundY + 0.01f;
+
+    glm::vec3 sceneExtent = M_SCENEMAX - M_SCENEMIN;
+    m_ssaoWorldRadius = std::max(m_settings.ssaoRadius * 0.1f * glm::length(sceneExtent), 0.001f);
+
+    ubo.effectParams = glm::vec4(m_ssaoActive ? 1.0f : 0.0f, 0.0f,
+                                 m_reflectionActive ? m_settings.reflectionStrength : 0.0f,
+                                 m_settings.floorRoughness);
+    ubo.passParams = glm::vec4(0.0f);
 
     std::memcpy(M_UNIFORMBUFFERSMAPPED[currentImage], &ubo, sizeof(ubo));
+
+    UniformBufferObject reflUbo = ubo;
+    glm::mat4 mirror = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, groundY, 0.0f))
+                     * glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, -1.0f, 1.0f))
+                     * glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -groundY, 0.0f));
+    reflUbo.view = ubo.view * mirror;
+    reflUbo.invViewProj = glm::inverse(ubo.proj * reflUbo.view);
+    reflUbo.cameraPos = glm::vec4(glm::vec3(mirror * glm::vec4(m_camera.position, 1.0f)), 1.0f);
+    reflUbo.effectParams = glm::vec4(0.0f, 0.0f, 0.0f, m_settings.floorRoughness);
+    reflUbo.passParams = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+    std::memcpy(M_REFLUNIFORMBUFFERS[currentImage].mapped, &reflUbo, sizeof(reflUbo));
 }
 
 

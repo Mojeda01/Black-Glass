@@ -11,6 +11,8 @@ struct FrameData {
     float4 groundParams;
     float4 groundExtent;
     float4 groundBoxes[8];
+    float4 effectParams;
+    float4 passParams;
 };
 
 struct MaterialData {
@@ -22,6 +24,7 @@ struct MaterialData {
     float4 uvLinear[5];
     float4 uvOffset[5];
     float4 transmissionParams;
+    float4 clearcoatParams;
 };
 
 struct PushData {
@@ -76,6 +79,12 @@ Sampler2DShadow shadowMap;
 [[vk::binding(12, 0)]]
 Sampler2D sceneColorTex;
 
+[[vk::binding(13, 0)]]
+Sampler2D aoTex;
+
+[[vk::binding(14, 0)]]
+Sampler2D reflectionTex;
+
 struct VSInput {
     float3 pos      : POSITION;
     float3 color    : COLOR;
@@ -112,6 +121,13 @@ VSOutput vertexMain(VSInput input)
     float3 c2 = push.model[2].xyz;
     output.mirrored = dot(c0, cross(c1, c2)) < 0.0 ? -1.0 : 1.0;
     return output;
+}
+
+[shader("vertex")]
+float4 prepassVertex(VSInput input) : SV_Position
+{
+    float4 world = mul(push.model, float4(input.pos, 1.0));
+    return mul(frame.proj, mul(frame.view, world));
 }
 
 float shadowFactor(float3 worldPos, float3 geometricNormal)
@@ -159,14 +175,23 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     }
     metallic = saturate(metallic);
     roughness = clamp(roughness, 0.045, 1.0);
+    if (material.flags1.w == 1)
+        roughness = clamp(frame.effectParams.w, 0.045, 1.0);
 
     float ao = 1.0;
     if (material.flags0.w != 0)
         ao = 1.0 + material.factors.w * (occlusionTex.Sample(slotUV(input.texCoord, 3)).r - 1.0);
 
+    bool reflectionPass = frame.passParams.x > 0.5;
+    bool opaquePath = material.transmissionParams.x <= 0.0 && material.flags1.y != 2;
+    if (frame.effectParams.x > 0.5 && opaquePath && !reflectionPass)
+        ao *= aoTex.SampleLevel(input.pos.xy / frame.debugParams.zw, 0.0).r;
+
     int debugView = int(frame.debugParams.x + 0.5);
 
     bool frontFacing = (input.mirrored < 0.0) ? !isFrontFace : isFrontFace;
+    if (reflectionPass)
+        frontFacing = !frontFacing;
 
     float3 N = normalize(input.normal);
     if (material.flags0.z != 0 && debugView != 1)
@@ -250,6 +275,56 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
         float groundShadow = lerp(1.0, shadow, 0.55);
         diffuseIBL *= contact * groundShadow;
         specularIBL *= contact * groundShadow;
+
+        if (frame.effectParams.z > 0.0)
+        {
+            float2 screenUV = input.pos.xy / frame.debugParams.zw;
+            float blurRadius = roughness * 0.02;
+            float spin = frac(52.9829189 * frac(dot(input.pos.xy, float2(0.06711056, 0.00583715)))) * 6.2831853;
+            float3 reflSum = reflectionTex.SampleLevel(screenUV, 0.0).rgb;
+            for (int i = 0; i < 8; i++)
+            {
+                float angle = float(i) * 2.399963 + spin;
+                float rr = sqrt((float(i) + 0.5) / 8.0) * blurRadius;
+                reflSum += reflectionTex.SampleLevel(screenUV + float2(cos(angle), sin(angle)) * rr, 0.0).rgb;
+            }
+            float3 reflColor = reflSum / 9.0;
+            specularIBL = reflColor * envBrdf * frame.effectParams.z;
+        }
+    }
+
+    float ccFactor = material.clearcoatParams.x;
+    if (ccFactor > 0.0)
+    {
+        float ccRoughness = clamp(material.clearcoatParams.y, 0.045, 1.0);
+        float NdotVc = max(dot(Ng, V), 1e-4);
+        float NdotLc = saturate(dot(Ng, L));
+        float NdotHc = saturate(dot(Ng, H));
+
+        float ccA = ccRoughness * ccRoughness;
+        float ccA2 = ccA * ccA;
+        float ccDenom = NdotHc * NdotHc * (ccA2 - 1.0) + 1.0;
+        float ccD = ccA2 / (PI * ccDenom * ccDenom);
+        float ccK = (ccRoughness + 1.0) * (ccRoughness + 1.0) / 8.0;
+        float ccG = (NdotLc / (NdotLc * (1.0 - ccK) + ccK)) * (NdotVc / (NdotVc * (1.0 - ccK) + ccK));
+        float ccFresnelDirect = 0.04 + 0.96 * pow(1.0 - VdotH, 5.0);
+        float3 ccSpecularLo = float3(1.0, 1.0, 1.0) * (ccD * ccG * ccFresnelDirect / (4.0 * NdotVc * NdotLc + 1e-4))
+                                * radiance * NdotLc * shadow * ccFactor;
+
+        float3 Rc = reflect(-V, Ng);
+        float2 ccBrdf = brdfLut.SampleLevel(float2(NdotVc, ccRoughness), 0.0).xy;
+        float ccEnv = 0.04 * ccBrdf.x + ccBrdf.y;
+        float3 ccPrefiltered = prefilterMap.SampleLevel(Rc, ccRoughness * frame.iblParams.x).rgb;
+        float3 ccSpecularIBL = ccPrefiltered * ccEnv * frame.iblParams.y * ccFactor;
+
+        float ccFresnelView = 0.04 + 0.96 * pow(1.0 - NdotVc, 5.0);
+        float ccAttenuation = 1.0 - ccFactor * ccFresnelView;
+        diffuseIBL *= ccAttenuation;
+        specularIBL *= ccAttenuation;
+        diffuseLo *= ccAttenuation;
+        specularLo *= ccAttenuation;
+        specularIBL += ccSpecularIBL;
+        specularLo += ccSpecularLo;
     }
 
     float3 emissive = material.emissiveFactor.rgb;

@@ -99,13 +99,82 @@ float4 bloomUpFragment(FullscreenOutput input) : SV_Target
     return float4(result, 1.0);
 }
 
-float3 tonemap(float3 color)
+float3 tonemapCustom(float3 color)
 {
     float lum = luma(color);
     float mapped = lum / (lum + 1.0);
     float3 hueKept = color * (mapped / max(lum, 1e-4));
     float3 perChannel = color / (color + 1.0);
     return saturate(lerp(hueKept, perChannel, mapped * mapped));
+}
+
+float3 tonemapACES(float3 color)
+{
+    float3x3 inputMat = float3x3(0.59719, 0.35458, 0.04823,
+                                 0.07600, 0.90834, 0.01566,
+                                 0.02840, 0.13383, 0.83777);
+    float3x3 outputMat = float3x3(1.60475, -0.53108, -0.07367,
+                                  -0.10208, 1.10813, -0.00605,
+                                  -0.00327, -0.07276, 1.07602);
+    float3 v = mul(inputMat, color / 0.6);
+    float3 a = v * (v + 0.0245786) - 0.000090537;
+    float3 b = v * (0.983729 * v + 0.4329510) + 0.238081;
+    return saturate(mul(outputMat, a / b));
+}
+
+float3 agxContrast(float3 x)
+{
+    float3 x2 = x * x;
+    float3 x4 = x2 * x2;
+    return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232;
+}
+
+float3 tonemapAgX(float3 color)
+{
+    float3x3 insetMat = float3x3(0.856627153315983, 0.0951212405381588, 0.0482516061458583,
+                                 0.137318972929847, 0.761241990602591, 0.101439036467562,
+                                 0.11189821299995, 0.0767994186031903, 0.811302368396859);
+    float3x3 outsetMat = float3x3(1.1271005818144368, -0.11060664309660323, -0.016493938717834573,
+                                  -0.1413297634984383, 1.157823702216272, -0.016493938717834257,
+                                  -0.14132976349843826, -0.11060664309660323, 1.2519364065950405);
+    float minEv = -12.47393;
+    float maxEv = 4.026069;
+    float3 v = mul(insetMat, color);
+    v = max(v, float3(1e-10, 1e-10, 1e-10));
+    v = clamp(log2(v), float3(minEv, minEv, minEv), float3(maxEv, maxEv, maxEv));
+    v = (v - minEv) / (maxEv - minEv);
+    v = agxContrast(v);
+    v = mul(outsetMat, v);
+    v = pow(max(v, float3(0.0, 0.0, 0.0)), float3(2.2, 2.2, 2.2));
+    return saturate(v);
+}
+
+float3 tonemapNeutral(float3 color)
+{
+    float startCompression = 0.8 - 0.04;
+    float desaturation = 0.15;
+    float x = min(color.r, min(color.g, color.b));
+    float offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
+    color -= offset;
+    float peak = max(color.r, max(color.g, color.b));
+    if (peak < startCompression)
+        return saturate(color);
+    float d = 1.0 - startCompression;
+    float newPeak = 1.0 - d * d / (peak + d - startCompression);
+    color *= newPeak / peak;
+    float g = 1.0 - 1.0 / (desaturation * (peak - newPeak) + 1.0);
+    return saturate(lerp(color, newPeak * float3(1.0, 1.0, 1.0), g));
+}
+
+float3 tonemap(float3 color, int mode)
+{
+    if (mode == 1)
+        return tonemapACES(color);
+    if (mode == 2)
+        return tonemapAgX(color);
+    if (mode == 3)
+        return tonemapNeutral(color);
+    return tonemapCustom(color);
 }
 
 [shader("fragment")]
@@ -121,7 +190,7 @@ float4 compositeFragment(FullscreenOutput input) : SV_Target
         color += bloomTex.SampleLevel(input.uv, 0.0).rgb * post.params.y;
 
     color *= post.params.x;
-    color = tonemap(color);
+    color = tonemap(color, int(post.params.w + 0.5));
 
     float2 p = input.pos.xy;
     float noise = frac(52.9829189 * frac(dot(p, float2(0.06711056, 0.00583715))));

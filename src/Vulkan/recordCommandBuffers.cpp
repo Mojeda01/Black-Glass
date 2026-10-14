@@ -90,7 +90,7 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
     }
 
     const bool msaa = M_MSAASAMPLES != VK_SAMPLE_COUNT_1_BIT;
-    const bool bloom = m_bloomEnabled && !M_BLOOMIMAGES.empty() && m_debugView == 0;
+    const bool bloom = m_settings.bloom && !M_BLOOMIMAGES.empty() && m_debugView == 0;
 
     struct TransparentItem
     {
@@ -128,86 +128,6 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
                 [](const TransparentItem& a, const TransparentItem& b) { return a.distance > b.distance; });
     const bool hasTransparent = !transparentOrder.empty();
 
-    transitionImageLayout(
-        commandBuffer, M_DEPTHIMAGE.image,
-        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-        VK_ACCESS_2_MEMORY_WRITE_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-        VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-        VK_IMAGE_ASPECT_DEPTH_BIT
-    );
-
-    transitionImageLayout(
-        commandBuffer, M_HDRCOLOR.image,
-        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_ACCESS_2_MEMORY_WRITE_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
-    );
-
-    if (msaa)
-    {
-        transitionImageLayout(
-            commandBuffer, M_MSAACOLOR.image,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_ACCESS_2_MEMORY_WRITE_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
-        );
-    }
-
-    VkClearValue clearColor = { { { 0.0f, 0.0f, 0.0f, 1.0f } } };
-
-    VkRenderingAttachmentInfo colorAttachment{};
-    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView = msaa ? M_MSAACOLOR.view : M_HDRCOLOR.view;
-    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    colorAttachment.clearValue = clearColor;
-    if (msaa)
-    {
-        colorAttachment.storeOp = hasTransparent ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        colorAttachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
-        colorAttachment.resolveImageView = M_HDRCOLOR.view;
-        colorAttachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    }
-    else
-    {
-        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    }
-
-    VkRenderingAttachmentInfo depthAttachment{};
-    depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    depthAttachment.imageView = M_DEPTHIMAGE.view;
-    depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depthAttachment.storeOp = hasTransparent ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.clearValue.depthStencil = { 1.0f, 0 };
-
-    VkRenderingInfo renderingInfo{};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderingInfo.renderArea.offset = { 0, 0 };
-    renderingInfo.renderArea.extent = M_SWAPCHAINEXTENT;
-    renderingInfo.layerCount = 1;
-    renderingInfo.colorAttachmentCount = 1;
-    renderingInfo.pColorAttachments = &colorAttachment;
-    renderingInfo.pDepthAttachment = &depthAttachment;
-
-    vkCmdBeginRendering(commandBuffer, &renderingInfo);
-
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, M_GRAPHICSPIPELINE);
-
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(M_SWAPCHAINEXTENT.width);
-    viewport.height = static_cast<float>(M_SWAPCHAINEXTENT.height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-
-    VkRect2D scissor{};
-    scissor.offset = { 0, 0 };
-    scissor.extent = M_SWAPCHAINEXTENT;
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
     const Model* boundModel = nullptr;
 
     VkDescriptorBufferInfo bufferInfo{};
@@ -230,6 +150,16 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
     shadowInfo.sampler = M_SHADOWSAMPLER;
     shadowInfo.imageView = M_SHADOWMAP.view;
     shadowInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkDescriptorImageInfo aoInfo{};
+    aoInfo.sampler = M_POSTSAMPLER;
+    aoInfo.imageView = M_AOBLUR.view;
+    aoInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkDescriptorImageInfo reflInfo{};
+    reflInfo.sampler = M_POSTSAMPLER;
+    reflInfo.imageView = M_REFLCOLOR.view;
+    reflInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     VkDescriptorImageInfo sceneInfo{};
     sceneInfo.sampler = M_SCENESAMPLER;
@@ -312,6 +242,18 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
         descriptorWrites[SCENE_COLOR_BINDING_INDEX].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorWrites[SCENE_COLOR_BINDING_INDEX].pImageInfo = &sceneInfo;
 
+        descriptorWrites[AO_BINDING_INDEX].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[AO_BINDING_INDEX].dstBinding = AO_BINDING_INDEX;
+        descriptorWrites[AO_BINDING_INDEX].descriptorCount = 1;
+        descriptorWrites[AO_BINDING_INDEX].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[AO_BINDING_INDEX].pImageInfo = &aoInfo;
+
+        descriptorWrites[REFLECTION_BINDING_INDEX].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[REFLECTION_BINDING_INDEX].dstBinding = REFLECTION_BINDING_INDEX;
+        descriptorWrites[REFLECTION_BINDING_INDEX].descriptorCount = 1;
+        descriptorWrites[REFLECTION_BINDING_INDEX].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[REFLECTION_BINDING_INDEX].pImageInfo = &reflInfo;
+
         M_PUSHDESCRIPTORFN(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             M_PIPELINELAYOUT, 0,
                             static_cast<uint32_t>(descriptorWrites.size()),
@@ -323,17 +265,7 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
         vkCmdDrawIndexed(commandBuffer, prim.indexCount, 1, prim.firstIndex, 0, 0);
     };
 
-    for (const Model* model : drawModels)
-    {
-        for (const Primitive& prim : model->primitives)
-        {
-            if (prim.renderClass == RenderClass::Opaque)
-            {
-                drawPrimitive(*model, prim);
-            }
-        }
-    }
-
+    auto drawSky = [&]()
     {
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, M_SKYPIPELINE);
 
@@ -356,7 +288,354 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
                             static_cast<uint32_t>(skyWrites.size()),
                             skyWrites.data());
         vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+    };
+
+    VkViewport fullViewport{};
+    fullViewport.width = static_cast<float>(M_SWAPCHAINEXTENT.width);
+    fullViewport.height = static_cast<float>(M_SWAPCHAINEXTENT.height);
+    fullViewport.maxDepth = 1.0f;
+    VkRect2D fullScissor{};
+    fullScissor.extent = M_SWAPCHAINEXTENT;
+
+    if (m_ssaoActive)
+    {
+        transitionImageLayout(
+            commandBuffer, M_PREPASSDEPTH.image,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+            VK_ACCESS_2_MEMORY_WRITE_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+            VK_IMAGE_ASPECT_DEPTH_BIT
+        );
+
+        VkRenderingAttachmentInfo prepassDepth{};
+        prepassDepth.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        prepassDepth.imageView = M_PREPASSDEPTH.view;
+        prepassDepth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+        prepassDepth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        prepassDepth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        prepassDepth.clearValue.depthStencil = { 1.0f, 0 };
+
+        VkRenderingInfo prepassInfo{};
+        prepassInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+        prepassInfo.renderArea.extent = M_SWAPCHAINEXTENT;
+        prepassInfo.layerCount = 1;
+        prepassInfo.pDepthAttachment = &prepassDepth;
+
+        vkCmdBeginRendering(commandBuffer, &prepassInfo);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, M_PREPASSPIPELINE);
+        vkCmdSetViewport(commandBuffer, 0, 1, &fullViewport);
+        vkCmdSetScissor(commandBuffer, 0, 1, &fullScissor);
+
+        VkWriteDescriptorSet frameWrite{};
+        frameWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        frameWrite.dstBinding = 0;
+        frameWrite.descriptorCount = 1;
+        frameWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        frameWrite.pBufferInfo = &bufferInfo;
+        M_PUSHDESCRIPTORFN(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, M_PIPELINELAYOUT, 0, 1, &frameWrite);
+
+        const Model* prepassBound = nullptr;
+        for (const Model* model : drawModels)
+        {
+            for (const Primitive& prim : model->primitives)
+            {
+                if (prim.renderClass != RenderClass::Opaque ||
+                    model->materials[prim.materialIndex].params.flags1.y == 1)
+                {
+                    continue;
+                }
+                if (prepassBound != model)
+                {
+                    VkBuffer vertexBuffers[] = { model->vertexBuffer.buffer };
+                    VkDeviceSize offsets[] = { 0 };
+                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+                    vkCmdBindIndexBuffer(commandBuffer, model->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+                    prepassBound = model;
+                }
+                glm::mat4 world = model->transform * prim.worldMatrix;
+                vkCmdPushConstants(commandBuffer, M_PIPELINELAYOUT, VK_SHADER_STAGE_VERTEX_BIT,
+                                    0, sizeof(glm::mat4), &world);
+                vkCmdDrawIndexed(commandBuffer, prim.indexCount, 1, prim.firstIndex, 0, 0);
+            }
+        }
+        vkCmdEndRendering(commandBuffer);
+
+        transitionImageLayout(
+            commandBuffer, M_PREPASSDEPTH.image,
+            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+            VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+            VK_IMAGE_ASPECT_DEPTH_BIT
+        );
+
+        auto fxPass = [&](VkPipeline pipeline, AllocatedImage& target, VkImageView inputA,
+                          VkImageView inputB, const glm::vec4& params)
+        {
+            transitionImageLayout(
+                commandBuffer, target.image,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_ACCESS_2_MEMORY_WRITE_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
+            );
+
+            VkRenderingAttachmentInfo attachment{};
+            attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+            attachment.imageView = target.view;
+            attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+            VkRenderingInfo passInfo{};
+            passInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+            passInfo.renderArea.extent = M_SWAPCHAINEXTENT;
+            passInfo.layerCount = 1;
+            passInfo.colorAttachmentCount = 1;
+            passInfo.pColorAttachments = &attachment;
+
+            vkCmdBeginRendering(commandBuffer, &passInfo);
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+            vkCmdSetViewport(commandBuffer, 0, 1, &fullViewport);
+            vkCmdSetScissor(commandBuffer, 0, 1, &fullScissor);
+
+            VkDescriptorImageInfo infos[2]{};
+            infos[0] = { M_POINTSAMPLER, inputA, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+            infos[1] = { M_POINTSAMPLER, inputB, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+
+            VkWriteDescriptorSet writes[3]{};
+            writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[0].dstBinding = 0;
+            writes[0].descriptorCount = 1;
+            writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writes[0].pBufferInfo = &bufferInfo;
+            for (uint32_t i = 0; i < 2; i++)
+            {
+                writes[1 + i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writes[1 + i].dstBinding = 1 + i;
+                writes[1 + i].descriptorCount = 1;
+                writes[1 + i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                writes[1 + i].pImageInfo = &infos[i];
+            }
+            M_PUSHDESCRIPTORFN(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, M_FXPIPELINELAYOUT, 0, 3, writes);
+            vkCmdPushConstants(commandBuffer, M_FXPIPELINELAYOUT, VK_SHADER_STAGE_FRAGMENT_BIT,
+                                0, sizeof(glm::vec4), &params);
+            vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+            vkCmdEndRendering(commandBuffer);
+
+            transitionImageLayout(
+                commandBuffer, target.image,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT
+            );
+        };
+
+        fxPass(M_SSAOPIPELINE, M_AORAW, M_PREPASSDEPTH.view, M_PREPASSDEPTH.view,
+                glm::vec4(m_ssaoWorldRadius, m_settings.ssaoIntensity, 0.0f, 0.0f));
+        fxPass(M_SSAOBLURPIPELINE, M_AOBLUR, M_AORAW.view, M_PREPASSDEPTH.view, glm::vec4(0.0f));
     }
+
+    if (m_reflectionActive)
+    {
+        const VkExtent2D reflExtent = { std::max(M_SWAPCHAINEXTENT.width / 2, 1u),
+                                        std::max(M_SWAPCHAINEXTENT.height / 2, 1u) };
+
+        transitionImageLayout(
+            commandBuffer, M_REFLDEPTH.image,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+            VK_ACCESS_2_MEMORY_WRITE_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+            VK_IMAGE_ASPECT_DEPTH_BIT
+        );
+        transitionImageLayout(
+            commandBuffer, M_REFLCOLOR.image,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_ACCESS_2_MEMORY_WRITE_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
+        );
+        if (msaa)
+        {
+            transitionImageLayout(
+                commandBuffer, M_REFLMSAA.image,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_ACCESS_2_MEMORY_WRITE_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
+            );
+        }
+
+        VkRenderingAttachmentInfo reflColor{};
+        reflColor.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        reflColor.imageView = msaa ? M_REFLMSAA.view : M_REFLCOLOR.view;
+        reflColor.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        reflColor.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        reflColor.clearValue = { { { 0.0f, 0.0f, 0.0f, 1.0f } } };
+        if (msaa)
+        {
+            reflColor.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            reflColor.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
+            reflColor.resolveImageView = M_REFLCOLOR.view;
+            reflColor.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        }
+        else
+        {
+            reflColor.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        }
+
+        VkRenderingAttachmentInfo reflDepth{};
+        reflDepth.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        reflDepth.imageView = M_REFLDEPTH.view;
+        reflDepth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+        reflDepth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        reflDepth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        reflDepth.clearValue.depthStencil = { 1.0f, 0 };
+
+        VkRenderingInfo reflRendering{};
+        reflRendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+        reflRendering.renderArea.extent = reflExtent;
+        reflRendering.layerCount = 1;
+        reflRendering.colorAttachmentCount = 1;
+        reflRendering.pColorAttachments = &reflColor;
+        reflRendering.pDepthAttachment = &reflDepth;
+
+        VkViewport reflViewport{};
+        reflViewport.width = static_cast<float>(reflExtent.width);
+        reflViewport.height = static_cast<float>(reflExtent.height);
+        reflViewport.maxDepth = 1.0f;
+        VkRect2D reflScissor{};
+        reflScissor.extent = reflExtent;
+
+        const VkBuffer frameBuffer = bufferInfo.buffer;
+        const VkDescriptorImageInfo savedReflInfo = reflInfo;
+        bufferInfo.buffer = M_REFLUNIFORMBUFFERS[M_CURRENTFRAME].buffer;
+        reflInfo.sampler = M_TEXTURESAMPLER;
+        reflInfo.imageView = M_FALLBACKTEXTURE.view;
+
+        vkCmdBeginRendering(commandBuffer, &reflRendering);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, M_GRAPHICSPIPELINE);
+        vkCmdSetViewport(commandBuffer, 0, 1, &reflViewport);
+        vkCmdSetScissor(commandBuffer, 0, 1, &reflScissor);
+        boundModel = nullptr;
+        for (const Model* model : drawModels)
+        {
+            if (model->isGround)
+            {
+                continue;
+            }
+            for (const Primitive& prim : model->primitives)
+            {
+                if (prim.renderClass == RenderClass::Opaque)
+                {
+                    drawPrimitive(*model, prim);
+                }
+            }
+        }
+        drawSky();
+        vkCmdEndRendering(commandBuffer);
+        boundModel = nullptr;
+
+        bufferInfo.buffer = frameBuffer;
+        reflInfo = savedReflInfo;
+
+        transitionImageLayout(
+            commandBuffer, M_REFLCOLOR.image,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT
+        );
+    }
+
+    transitionImageLayout(
+        commandBuffer, M_DEPTHIMAGE.image,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+        VK_ACCESS_2_MEMORY_WRITE_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+        VK_IMAGE_ASPECT_DEPTH_BIT
+    );
+
+    transitionImageLayout(
+        commandBuffer, M_HDRCOLOR.image,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_ACCESS_2_MEMORY_WRITE_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
+    );
+
+    if (msaa)
+    {
+        transitionImageLayout(
+            commandBuffer, M_MSAACOLOR.image,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_ACCESS_2_MEMORY_WRITE_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
+        );
+    }
+
+    VkClearValue clearColor = { { { 0.0f, 0.0f, 0.0f, 1.0f } } };
+
+    VkRenderingAttachmentInfo colorAttachment{};
+    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    colorAttachment.imageView = msaa ? M_MSAACOLOR.view : M_HDRCOLOR.view;
+    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.clearValue = clearColor;
+    if (msaa)
+    {
+        colorAttachment.storeOp = hasTransparent ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        colorAttachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
+        colorAttachment.resolveImageView = M_HDRCOLOR.view;
+        colorAttachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
+    else
+    {
+        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    }
+
+    VkRenderingAttachmentInfo depthAttachment{};
+    depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    depthAttachment.imageView = M_DEPTHIMAGE.view;
+    depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depthAttachment.storeOp = hasTransparent ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthAttachment.clearValue.depthStencil = { 1.0f, 0 };
+
+    VkRenderingInfo renderingInfo{};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    renderingInfo.renderArea.offset = { 0, 0 };
+    renderingInfo.renderArea.extent = M_SWAPCHAINEXTENT;
+    renderingInfo.layerCount = 1;
+    renderingInfo.colorAttachmentCount = 1;
+    renderingInfo.pColorAttachments = &colorAttachment;
+    renderingInfo.pDepthAttachment = &depthAttachment;
+
+    vkCmdBeginRendering(commandBuffer, &renderingInfo);
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, M_GRAPHICSPIPELINE);
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(M_SWAPCHAINEXTENT.width);
+    viewport.height = static_cast<float>(M_SWAPCHAINEXTENT.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = { 0, 0 };
+    scissor.extent = M_SWAPCHAINEXTENT;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    for (const Model* model : drawModels)
+    {
+        for (const Primitive& prim : model->primitives)
+        {
+            if (prim.renderClass == RenderClass::Opaque)
+            {
+                drawPrimitive(*model, prim);
+            }
+        }
+    }
+
+    drawSky();
 
     vkCmdEndRendering(commandBuffer);
 
@@ -649,8 +928,9 @@ void AlethiaV3::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t ima
     fullscreenPass(M_COMPOSITEPIPELINE, M_SWAPCHAINIMAGEVIEWS[imageIndex], M_SWAPCHAINEXTENT,
                     VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                     M_HDRCOLOR.view, bloom ? M_BLOOMIMAGES[0].view : M_HDRCOLOR.view,
-                    glm::vec4(m_exposure, bloom ? m_bloomStrength : 0.0f,
-                                m_debugView != 0 ? 1.0f : 0.0f, 0.0f), false);
+                    glm::vec4(m_settings.exposure, bloom ? m_settings.bloomStrength : 0.0f,
+                                m_debugView != 0 ? 1.0f : 0.0f,
+                                static_cast<float>(m_settings.tonemapper)), false);
 
     if (m_imguiReady && m_showUi)
     {

@@ -476,6 +476,20 @@ MeshData AlethiaV3::loadGltf(const std::string& path)
             material.params.transmissionParams.x = static_cast<float>(
                 transmissionExt->second.Get("transmissionFactor").GetNumberAsDouble());
         }
+        auto clearcoatExt = m.extensions.find("KHR_materials_clearcoat");
+        if (clearcoatExt != m.extensions.end())
+        {
+            if (clearcoatExt->second.Has("clearcoatFactor"))
+            {
+                material.params.clearcoatParams.x = static_cast<float>(
+                    clearcoatExt->second.Get("clearcoatFactor").GetNumberAsDouble());
+            }
+            if (clearcoatExt->second.Has("clearcoatRoughnessFactor"))
+            {
+                material.params.clearcoatParams.y = static_cast<float>(
+                    clearcoatExt->second.Get("clearcoatRoughnessFactor").GetNumberAsDouble());
+            }
+        }
         mesh.materials.push_back(material);
     }
 

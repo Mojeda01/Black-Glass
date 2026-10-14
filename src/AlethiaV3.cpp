@@ -164,6 +164,10 @@ void AlethiaV3::cleanup()
     {
         destroyBuffer(buffer);
     }
+    for (auto& buffer : M_REFLUNIFORMBUFFERS)
+    {
+        destroyBuffer(buffer);
+    }
     if (M_DESCRIPTORSETLAYOUT != VK_NULL_HANDLE)
     {
         vkDestroyDescriptorSetLayout(M_DEVICE, M_DESCRIPTORSETLAYOUT, nullptr);
@@ -182,12 +186,25 @@ void AlethiaV3::cleanup()
         std::cout << "  [cleanup] Sync Objects destroyed. \n";
     }
 
-    for (VkPipeline pipeline : { M_SKYPIPELINE, M_TRANSMISSIONPIPELINE, M_BLENDPIPELINE, M_BLOOMDOWNPIPELINE, M_BLOOMUPPIPELINE, M_COMPOSITEPIPELINE })
+    for (VkPipeline pipeline : { M_PREPASSPIPELINE, M_SSAOPIPELINE, M_SSAOBLURPIPELINE, M_SKYPIPELINE, M_TRANSMISSIONPIPELINE, M_BLENDPIPELINE, M_BLOOMDOWNPIPELINE, M_BLOOMUPPIPELINE, M_COMPOSITEPIPELINE })
     {
         if (pipeline != VK_NULL_HANDLE)
         {
             vkDestroyPipeline(M_DEVICE, pipeline, nullptr);
         }
+    }
+
+    if (M_POINTSAMPLER != VK_NULL_HANDLE)
+    {
+        vkDestroySampler(M_DEVICE, M_POINTSAMPLER, nullptr);
+    }
+    if (M_FXPIPELINELAYOUT != VK_NULL_HANDLE)
+    {
+        vkDestroyPipelineLayout(M_DEVICE, M_FXPIPELINELAYOUT, nullptr);
+    }
+    if (M_FXDESCRIPTORLAYOUT != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorSetLayout(M_DEVICE, M_FXDESCRIPTORLAYOUT, nullptr);
     }
 
     if (M_POSTPIPELINELAYOUT != VK_NULL_HANDLE)

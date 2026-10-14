@@ -5,6 +5,7 @@
 #include "vma/vk_mem_alloc.h"
 
 #include "Camera.h"
+#include "RenderSettings.h"
 
 #include <vector>
 #include <array>
@@ -147,6 +148,7 @@ struct MaterialParams
     };
     glm::vec4 uvOffset[MATERIAL_TEXTURE_SLOTS] = {};
     glm::vec4 transmissionParams{ 0.0f, 1.5f, 0.0f, 0.0f };
+    glm::vec4 clearcoatParams{ 0.0f, 0.0f, 0.0f, 0.0f };
 };
 
 struct Material
@@ -210,6 +212,8 @@ struct UniformBufferObject
     glm::vec4 groundParams;
     glm::vec4 groundExtent;
     glm::vec4 groundBoxes[8];
+    glm::vec4 effectParams;
+    glm::vec4 passParams;
 };
 
 constexpr VkFormat HDR_FORMAT = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -221,7 +225,9 @@ constexpr uint32_t IBL_TEXTURE_BINDINGS = 4;
 constexpr uint32_t BLOOM_MAX_LEVELS = 6;
 constexpr uint32_t SHADOW_BINDING_INDEX = 2 + MATERIAL_TEXTURE_SLOTS + IBL_TEXTURE_BINDINGS;
 constexpr uint32_t SCENE_COLOR_BINDING_INDEX = SHADOW_BINDING_INDEX + 1;
-constexpr uint32_t GRAPHICS_BINDING_COUNT = SCENE_COLOR_BINDING_INDEX + 1;
+constexpr uint32_t AO_BINDING_INDEX = SCENE_COLOR_BINDING_INDEX + 1;
+constexpr uint32_t REFLECTION_BINDING_INDEX = AO_BINDING_INDEX + 1;
+constexpr uint32_t GRAPHICS_BINDING_COUNT = REFLECTION_BINDING_INDEX + 1;
 constexpr uint32_t GROUND_BOX_MAX = 8;
 constexpr uint32_t SHADOW_MAP_SIZE = 4096;
 constexpr VkFormat SHADOW_FORMAT = VK_FORMAT_D32_SFLOAT;
@@ -288,18 +294,11 @@ private:
     bool m_mouseCaptured = false;
     int m_debugView = 0;
     float m_fov = 45.0f;
-    float m_sunIntensity = 3.0f;
-    float m_sunAzimuth = 0.0f;
-    float m_sunElevation = 60.0f;
-    float m_envIntensity = 1.0f;
-    bool m_shadowsEnabled = true;
+    RenderSettings m_settings;
     bool m_shadowDirty = false;
     bool m_imguiReady = false;
     bool m_showUi = true;
     VkFormat m_uiColorFormat = VK_FORMAT_UNDEFINED;
-    float m_exposure = 1.0f;
-    float m_bloomStrength = 0.04f;
-    bool m_bloomEnabled = true;
     double m_lastX = 0.0;
     double m_lastY = 0.0;
     float m_deltaTime = 0.0f;
@@ -339,6 +338,23 @@ private:
     VkPipeline M_BLOOMDOWNPIPELINE = VK_NULL_HANDLE;
     VkPipeline M_BLOOMUPPIPELINE = VK_NULL_HANDLE;
     VkPipeline M_COMPOSITEPIPELINE = VK_NULL_HANDLE;
+
+    // EFFECTS
+    AllocatedImage M_PREPASSDEPTH{};
+    AllocatedImage M_AORAW{};
+    AllocatedImage M_AOBLUR{};
+    AllocatedImage M_REFLMSAA{};
+    AllocatedImage M_REFLCOLOR{};
+    AllocatedImage M_REFLDEPTH{};
+    VkSampler M_POINTSAMPLER = VK_NULL_HANDLE;
+    VkDescriptorSetLayout M_FXDESCRIPTORLAYOUT = VK_NULL_HANDLE;
+    VkPipelineLayout M_FXPIPELINELAYOUT = VK_NULL_HANDLE;
+    VkPipeline M_PREPASSPIPELINE = VK_NULL_HANDLE;
+    VkPipeline M_SSAOPIPELINE = VK_NULL_HANDLE;
+    VkPipeline M_SSAOBLURPIPELINE = VK_NULL_HANDLE;
+    bool m_ssaoActive = false;
+    bool m_reflectionActive = false;
+    float m_ssaoWorldRadius = 0.1f;
 
     // SHADOWS
     AllocatedImage M_SHADOWMAP{};
@@ -387,6 +403,7 @@ private:
     // UNIFORMS
     std::vector<AllocatedBuffer> M_UNIFORMBUFFERS;
     std::vector<void*> M_UNIFORMBUFFERSMAPPED;
+    std::vector<AllocatedBuffer> M_REFLUNIFORMBUFFERS;
     VkDescriptorSetLayout M_DESCRIPTORSETLAYOUT = VK_NULL_HANDLE;
     PFN_vkCmdPushDescriptorSetKHR M_PUSHDESCRIPTORFN = nullptr;
 
@@ -414,6 +431,9 @@ private:
     void createHdrResources();
     void destroyHdrResources();
     void createPostResources();
+    void createEffectPipelines();
+    void createEffectResources();
+    void destroyEffectResources();
     void createIBL();
     void classifyPrimitives(MeshData& mesh);
     bool loadModel(const std::string& path);
