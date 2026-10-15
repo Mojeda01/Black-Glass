@@ -7,6 +7,7 @@
 #include "Camera.h"
 #include "MeshData.h"
 #include "Editor/Brush.h"
+#include "Editor/Light.h"
 #include "Debug/DebugDraw.h"
 #include "RenderSettings.h"
 
@@ -64,6 +65,7 @@ struct ModelAsset
     glm::vec3 localMin{ 0.0f };
     glm::vec3 localMax{ 0.0f };
     std::shared_ptr<BrushDef> brush;
+    bool marker = false;
 };
 
 struct Model
@@ -78,9 +80,12 @@ struct Model
     float scale = 1.0f;
     glm::mat4 transform{ 1.0f };
     std::optional<BrushDef> brush;
+    std::optional<LightDef> light;
     glm::vec3 worldMin{ 0.0f };
     glm::vec3 worldMax{ 0.0f };
 };
+
+constexpr uint32_t MAX_POINT_LIGHTS = 16;
 
 struct UniformBufferObject 
 {
@@ -99,6 +104,9 @@ struct UniformBufferObject
     glm::vec4 effectParams;
     glm::vec4 passParams;
     glm::vec4 projParams;
+    glm::vec4 lightInfo;
+    glm::vec4 lightPositions[MAX_POINT_LIGHTS];
+    glm::vec4 lightColors[MAX_POINT_LIGHTS];
 };
 
 constexpr VkFormat HDR_FORMAT = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -217,6 +225,7 @@ private:
     std::unique_ptr<EditorHost> m_editorHost;
     std::unique_ptr<Editor> m_editor;
     bool m_brushPurgePending = false;
+    bool m_showLightMarkers = true;
     bool m_shadowRefreshPending = false;
     double m_shadowRefreshTime = 0.0;
     static constexpr uint32_t DEBUG_LINE_CAPACITY = 65536;

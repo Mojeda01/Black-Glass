@@ -13,6 +13,10 @@ struct FrameData {
     float4 groundBoxes[8];
     float4 effectParams;
     float4 passParams;
+    float4 projParams;
+    float4 lightInfo;
+    float4 lightPositions[16];
+    float4 lightColors[16];
 };
 
 struct MaterialData {
@@ -25,6 +29,7 @@ struct MaterialData {
     float4 uvOffset[5];
     float4 transmissionParams;
     float4 clearcoatParams;
+    float4 worldUV;
 };
 
 struct PushData {
@@ -165,9 +170,26 @@ float shadowFactor(float3 worldPos, float3 geometricNormal)
 [shader("fragment")]
 float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Target
 {
+    float2 baseUV = input.texCoord;
+    if (material.worldUV.x > 0.5)
+    {
+        float3 surfaceNormal = normalize(input.normal);
+        float tileSize = max(material.worldUV.y, 0.01);
+        if (abs(surfaceNormal.y) > 0.999)
+        {
+            baseUV = float2(input.worldPos.x, input.worldPos.z) / tileSize;
+        }
+        else
+        {
+            float3 uAxis = normalize(cross(float3(0.0, 1.0, 0.0), surfaceNormal));
+            float3 vAxis = cross(surfaceNormal, uAxis);
+            baseUV = float2(dot(input.worldPos, uAxis), -dot(input.worldPos, vAxis)) / tileSize;
+        }
+    }
+
     float4 baseColor = material.baseColorFactor * float4(input.color, 1.0);
     if (material.flags0.x != 0)
-        baseColor *= baseColorTex.Sample(slotUV(input.texCoord, 0));
+        baseColor *= baseColorTex.Sample(slotUV(baseUV, 0));
 
     if (material.flags1.y == 1 && baseColor.a < material.emissiveFactor.w)
         discard;
@@ -176,7 +198,7 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     float roughness = material.factors.y;
     if (material.flags0.y != 0)
     {
-        float4 mr = metalRoughTex.Sample(slotUV(input.texCoord, 1));
+        float4 mr = metalRoughTex.Sample(slotUV(baseUV, 1));
         roughness *= mr.g;
         metallic *= mr.b;
     }
@@ -187,7 +209,7 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
 
     float ao = 1.0;
     if (material.flags0.w != 0)
-        ao = 1.0 + material.factors.w * (occlusionTex.Sample(slotUV(input.texCoord, 3)).r - 1.0);
+        ao = 1.0 + material.factors.w * (occlusionTex.Sample(slotUV(baseUV, 3)).r - 1.0);
 
     bool reflectionPass = frame.passParams.x > 0.5;
     bool opaquePath = material.transmissionParams.x <= 0.0 && material.flags1.y != 2;
@@ -206,7 +228,7 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
         float3 T = normalize(input.tangent.xyz);
         T = normalize(T - N * dot(N, T));
         float3 B = cross(N, T) * input.tangent.w;
-        float3 tn = normalTex.Sample(slotUV(input.texCoord, 2)).xyz * 2.0 - 1.0;
+        float3 tn = normalTex.Sample(slotUV(baseUV, 2)).xyz * 2.0 - 1.0;
         tn.xy *= material.factors.z;
         N = normalize(T * tn.x + B * tn.y + N * tn.z);
     }
@@ -255,6 +277,35 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     float3 radiance = float3(1.0, 1.0, 1.0) * frame.lightDir.w * frame.iblParams.z;
     float3 diffuseLo = diffuse * radiance * NdotL * shadow;
     float3 specularLo = specular * radiance * NdotL * shadow;
+
+    int pointLightCount = int(frame.lightInfo.x + 0.5);
+    for (int li = 0; li < pointLightCount; li++)
+    {
+        float3 toLight = frame.lightPositions[li].xyz - input.worldPos;
+        float lightRadius = max(frame.lightPositions[li].w, 0.1);
+        float distSq = dot(toLight, toLight);
+        float ratio = distSq / (lightRadius * lightRadius);
+        float window = saturate(1.0 - ratio * ratio);
+        float attenuation = window * window / (distSq + 1.0);
+        if (attenuation > 0.0)
+        {
+            float3 Lp = toLight * rsqrt(max(distSq, 1e-6));
+            float3 Hp = normalize(V + Lp);
+            float NdotLp = saturate(dot(N, Lp));
+            float NdotHp = saturate(dot(N, Hp));
+            float VdotHp = saturate(dot(V, Hp));
+            float denomP = NdotHp * NdotHp * (a2 - 1.0) + 1.0;
+            float Dp = a2 / (PI * denomP * denomP);
+            float Gp = (NdotLp / (NdotLp * (1.0 - k) + k)) * (NdotV / (NdotV * (1.0 - k) + k));
+            float3 Fp = F0 + (1.0 - F0) * pow(1.0 - VdotHp, 5.0);
+            float3 specP = Dp * Gp * Fp / (4.0 * NdotV * NdotLp + 1e-4);
+            float3 kdP = (1.0 - Fp) * (1.0 - metallic);
+            float3 lightRadiance = frame.lightColors[li].rgb * attenuation;
+            diffuseLo += kdP * baseColor.rgb / PI * lightRadiance * NdotLp;
+            specularLo += specP * lightRadiance * NdotLp;
+        }
+    }
+
     float3 Lo = diffuseLo + specularLo;
 
     float3 R = reflect(-V, N);
@@ -336,7 +387,7 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
 
     float3 emissive = material.emissiveFactor.rgb;
     if (material.flags1.x != 0)
-        emissive *= emissiveTex.Sample(slotUV(input.texCoord, 4)).rgb;
+        emissive *= emissiveTex.Sample(slotUV(baseUV, 4)).rgb;
     emissive += push.highlight.rgb * push.highlight.w;
 
     float transmission = material.transmissionParams.x;

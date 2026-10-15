@@ -2,14 +2,18 @@
 #include "../Editor/BrushMesh.h"
 #include "../Editor/Editor.h"
 #include "../Editor/EditorHost.h"
+#include "../Editor/ProceduralTextures.h"
+#include "../stb_image.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <limits>
 #include <map>
+#include <set>
 #include <filesystem>
 #include <iostream>
 
@@ -26,7 +30,8 @@ namespace
 
     bool sameMaterial(const BrushDef& a, const BrushDef& b)
     {
-        return a.color == b.color && a.roughness == b.roughness && a.metallic == b.metallic;
+        return a.color == b.color && a.roughness == b.roughness && a.metallic == b.metallic &&
+               a.texture == b.texture && a.textureScale == b.textureScale;
     }
 
     bool sameAsset(const BrushDef& a, const BrushDef& b)
@@ -293,6 +298,10 @@ public:
             {
                 continue;
             }
+            if (model->light)
+            {
+                continue;
+            }
             if (excludeSelected && m_engine.isSelected(model.get()))
             {
                 continue;
@@ -378,7 +387,16 @@ public:
                 continue;
             }
 
-            if (model->brush)
+            if (model->light)
+            {
+                LevelLight light;
+                light.name = model->name;
+                light.def = *model->light;
+                light.position = model->position;
+                light.selected = m_engine.isSelected(model.get());
+                level.lights.push_back(light);
+            }
+            else if (model->brush)
             {
                 LevelBrush brush;
                 brush.name = model->name;
@@ -508,6 +526,89 @@ public:
         return true;
     }
 
+    bool spawnLight(const LevelLight& light, bool select) override
+    {
+        try
+        {
+            int index = acquireMarkerAsset();
+            Model* model = m_engine.addInstance(index, false);
+            if (!model)
+            {
+                return false;
+            }
+            model->name = light.name;
+            model->light = light.def;
+            model->position = light.position;
+            model->visible = m_engine.m_showLightMarkers;
+            m_engine.updateModelTransform(*model);
+            if (select)
+            {
+                m_engine.addToSelection(model);
+            }
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            m_engine.m_loadError = e.what();
+            std::cerr << "  [editor] Light creation failed - " << e.what() << "\n";
+            return false;
+        }
+    }
+
+    LightDef* selectedLight() override
+    {
+        Model* model = m_engine.m_selected;
+        if (m_engine.m_selection.size() == 1 && model && !model->ghost && model->light)
+        {
+            return &*model->light;
+        }
+        return nullptr;
+    }
+
+    void setLightMarkersVisible(bool visible) override
+    {
+        m_engine.m_showLightMarkers = visible;
+        for (const auto& model : m_engine.M_MODELS)
+        {
+            if (model->light)
+            {
+                model->visible = visible;
+            }
+        }
+        if (!visible)
+        {
+            std::vector<Model*> kept;
+            for (Model* model : m_engine.m_selection)
+            {
+                if (!model->light)
+                {
+                    kept.push_back(model);
+                }
+            }
+            m_engine.clearSelection();
+            for (Model* model : kept)
+            {
+                m_engine.addToSelection(model);
+            }
+        }
+    }
+
+    std::vector<std::string> textureNames() override
+    {
+        std::set<std::string> names(proceduralTextureNames().begin(), proceduralTextureNames().end());
+
+        std::error_code error;
+        std::filesystem::path directory = std::filesystem::path(assetRoot()) / "textures";
+        for (std::filesystem::directory_iterator it(directory, error), end; !error && it != end; it.increment(error))
+        {
+            if (it->is_regular_file() && isTextureExtension(it->path().extension().string()))
+            {
+                names.insert(it->path().stem().string());
+            }
+        }
+        return std::vector<std::string>(names.begin(), names.end());
+    }
+
     BrushDef* selectedBrush() override
     {
         Model* model = m_engine.m_selected;
@@ -542,11 +643,11 @@ public:
 
                 if (users == 1)
                 {
-                    if (!sameGeometry(*model->asset->brush, def))
+                    if (!sameGeometry(*model->asset->brush, def) || model->asset->brush->texture != def.texture)
                     {
                         BrushDef unit = def;
                         unit.size = glm::vec3(1.0f);
-                        MeshData mesh = buildBrushMesh(unit);
+                        MeshData mesh = buildAssetMesh(unit);
                         m_engine.replaceAssetMesh(*model->asset, mesh);
                         *model->asset->brush = unit;
                     }
@@ -588,6 +689,16 @@ public:
         {
             if (!source || source->ghost || !source->asset)
             {
+                continue;
+            }
+
+            if (source->light)
+            {
+                LevelLight copy;
+                copy.name = source->name + " copy";
+                copy.def = *source->light;
+                copy.position = source->position + offset;
+                created |= spawnLight(copy, true);
                 continue;
             }
 
@@ -696,10 +807,84 @@ private:
 
         BrushDef unit = def;
         unit.size = glm::vec3(1.0f);
-        MeshData mesh = buildBrushMesh(unit);
+        MeshData mesh = buildAssetMesh(unit);
         int index = m_engine.registerAsset(mesh, "Brush material", std::string());
         m_engine.M_LIBRARY[index]->brush = std::make_shared<BrushDef>(unit);
         return index;
+    }
+
+    int acquireMarkerAsset()
+    {
+        for (size_t i = 0; i < m_engine.M_LIBRARY.size(); i++)
+        {
+            if (m_engine.M_LIBRARY[i]->marker)
+            {
+                return static_cast<int>(i);
+            }
+        }
+
+        MeshData mesh = buildLightMarkerMesh();
+        int index = m_engine.registerAsset(mesh, "Light marker", std::string());
+        m_engine.M_LIBRARY[index]->marker = true;
+        return index;
+    }
+
+    static bool isTextureExtension(const std::string& extension)
+    {
+        std::string lower = extension;
+        std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return lower == ".png" || lower == ".jpg" || lower == ".jpeg" || lower == ".tga" || lower == ".bmp";
+    }
+
+    bool loadTextureFile(const std::string& name, ImageData& out) const
+    {
+        std::error_code error;
+        std::filesystem::path directory = std::filesystem::path(assetRoot()) / "textures";
+        for (std::filesystem::directory_iterator it(directory, error), end; !error && it != end; it.increment(error))
+        {
+            if (!it->is_regular_file() || !isTextureExtension(it->path().extension().string()) ||
+                it->path().stem().string() != name)
+            {
+                continue;
+            }
+
+            int width = 0;
+            int height = 0;
+            int channels = 0;
+            unsigned char* pixels = stbi_load(it->path().string().c_str(), &width, &height, &channels, 4);
+            if (!pixels)
+            {
+                return false;
+            }
+            out.width = width;
+            out.height = height;
+            out.pixels.assign(pixels, pixels + static_cast<size_t>(width) * static_cast<size_t>(height) * 4);
+            stbi_image_free(pixels);
+            return true;
+        }
+        return false;
+    }
+
+    const ImageData* textureImage(const std::string& name)
+    {
+        auto found = m_textureCache.find(name);
+        if (found == m_textureCache.end())
+        {
+            ImageData image;
+            if (!loadTextureFile(name, image))
+            {
+                image = ImageData{};
+                generateProceduralTexture(name, image);
+            }
+            found = m_textureCache.emplace(name, std::move(image)).first;
+        }
+        return found->second.pixels.empty() ? nullptr : &found->second;
+    }
+
+    MeshData buildAssetMesh(const BrushDef& unit)
+    {
+        const ImageData* image = unit.texture.empty() ? nullptr : textureImage(unit.texture);
+        return buildBrushMesh(unit, image);
     }
 
     void updateAssetMaterial(ModelAsset& asset, const BrushDef& def)
@@ -713,6 +898,7 @@ private:
         params.baseColorFactor = glm::vec4(def.color, 1.0f);
         params.factors.x = def.metallic;
         params.factors.y = def.roughness;
+        params.worldUV.y = def.textureScale;
         std::memcpy(asset.materialBuffer.mapped, &params, sizeof(MaterialParams));
 
         BrushDef unit = def;
@@ -722,6 +908,7 @@ private:
 
     BlackGlass& m_engine;
     mutable std::map<std::pair<int, int>, MeshData> m_unitMeshes;
+    std::map<std::string, ImageData> m_textureCache;
 };
 
 void BlackGlass::initEditor()
@@ -774,6 +961,8 @@ bool BlackGlass::handleEditorKey(int key, int mods, bool repeat)
         return m_editor->execute(EditorCommand::ToggleGrid);
     case GLFW_KEY_R:
         return m_editor->execute(EditorCommand::Rotate);
+    case GLFW_KEY_L:
+        return m_editor->execute(EditorCommand::AddLight);
     default:
         return false;
     }

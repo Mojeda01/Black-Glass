@@ -203,6 +203,28 @@ void BlackGlass::updateUniformBuffer(uint32_t currentImage)
     ubo.passParams = glm::vec4(0.0f);
     ubo.projParams = glm::vec4(ubo.proj[2][2], ubo.proj[3][2], ubo.proj[0][0], ubo.proj[1][1]);
 
+    std::vector<std::pair<float, const Model*>> activeLights;
+    for (const auto& model : M_MODELS)
+    {
+        if (model->light && !model->ghost && model->light->enabled)
+        {
+            glm::vec3 center = (model->worldMin + model->worldMax) * 0.5f;
+            activeLights.emplace_back(glm::distance(center, m_camera.position), model.get());
+        }
+    }
+    std::sort(activeLights.begin(), activeLights.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    uint32_t lightCount = static_cast<uint32_t>(std::min<size_t>(activeLights.size(), MAX_POINT_LIGHTS));
+    for (uint32_t i = 0; i < lightCount; i++)
+    {
+        const Model* lightModel = activeLights[i].second;
+        glm::vec3 center = (lightModel->worldMin + lightModel->worldMax) * 0.5f;
+        ubo.lightPositions[i] = glm::vec4(center, lightModel->light->radius);
+        ubo.lightColors[i] = glm::vec4(lightModel->light->color * lightModel->light->intensity, 0.0f);
+    }
+    ubo.lightInfo = glm::vec4(static_cast<float>(lightCount), 0.0f, 0.0f, 0.0f);
+
     std::memcpy(M_UNIFORMBUFFERSMAPPED[currentImage], &ubo, sizeof(ubo));
 
     UniformBufferObject reflUbo = ubo;

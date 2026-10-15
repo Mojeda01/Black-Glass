@@ -5,6 +5,7 @@
 #include "../Debug/DebugDraw.h"
 
 #include <string>
+#include <vector>
 
 class EditorHost
 {
@@ -32,6 +33,10 @@ public:
     virtual void clearLevel() = 0;
     virtual bool spawnBrush(const LevelBrush& brush, bool select) = 0;
     virtual bool spawnModel(const LevelModel& model) = 0;
+    virtual bool spawnLight(const LevelLight& light, bool select) = 0;
+    virtual LightDef* selectedLight() = 0;
+    virtual void setLightMarkersVisible(bool visible) = 0;
+    virtual std::vector<std::string> textureNames() = 0;
 
     virtual BrushDef* selectedBrush() = 0;
     virtual void applySelectedBrush() = 0;

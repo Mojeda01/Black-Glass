@@ -537,7 +537,7 @@ void BlackGlass::buildUi()
                 int addIndex = -1;
                 for (size_t i = 0; i < M_LIBRARY.size(); i++)
                 {
-                    if (M_LIBRARY[i]->brush)
+                    if (M_LIBRARY[i]->brush || M_LIBRARY[i]->marker)
                     {
                         continue;
                     }

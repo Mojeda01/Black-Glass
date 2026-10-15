@@ -17,7 +17,8 @@ enum class EditorCommand
     DrawTool,
     ToggleGrid,
     Rotate,
-    Save
+    Save,
+    AddLight
 };
 
 class Editor
@@ -39,6 +40,11 @@ private:
     void drawSelectedBrushSection();
     void drawBrushProperties(BrushDef& brush);
     void drawLevelSection();
+    void drawLightSection();
+    void drawLightProperties(LightDef& light);
+    bool drawTextureControls(BrushDef& brush, const char* suffix);
+    void addLight();
+    void refreshTextureList();
 
     void toggleDrawTool();
     void trackHistory(bool overlayVisible);
@@ -67,6 +73,9 @@ private:
     bool m_showGrid = true;
     bool m_showSelection = true;
     int m_nextBrush = 1;
+    int m_nextLight = 1;
+    bool m_showLightMarkers = true;
+    std::vector<std::string> m_textureNames;
     char m_levelName[64] = "level";
     std::vector<std::string> m_levelFiles;
     std::string m_status;

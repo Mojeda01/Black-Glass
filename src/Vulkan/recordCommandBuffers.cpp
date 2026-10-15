@@ -318,6 +318,15 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
         {
             highlight = glm::vec4(0.25f, 0.85f, 1.0f, 0.18f);
         }
+        else if (model.light)
+        {
+            glm::vec3 glow = model.light->enabled ? model.light->color * 3.0f : glm::vec3(0.05f);
+            if (isSelected(&model))
+            {
+                glow += glm::vec3(0.4f, 0.24f, 0.06f);
+            }
+            highlight = glm::vec4(glow, 1.0f);
+        }
         else if (isSelected(&model))
         {
             highlight = glm::vec4(1.0f, 0.6f, 0.15f, 0.1f);

@@ -112,6 +112,7 @@ struct MaterialParams
     glm::vec4 uvOffset[MATERIAL_TEXTURE_SLOTS] = {};
     glm::vec4 transmissionParams{ 0.0f, 1.5f, 0.0f, 0.0f };
     glm::vec4 clearcoatParams{ 0.0f, 0.0f, 0.0f, 0.0f };
+    glm::vec4 worldUV{ 0.0f, 2.0f, 0.0f, 0.0f };
 };
 
 struct Material

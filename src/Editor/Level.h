@@ -1,5 +1,6 @@
 #pragma once
 #include "Brush.h"
+#include "Light.h"
 #include "../RenderSettings.h"
 
 #include <glm/glm.hpp>
@@ -26,6 +27,14 @@ struct LevelModel
     bool selected = false;
 };
 
+struct LevelLight
+{
+    std::string name;
+    LightDef def;
+    glm::vec3 position{ 0.0f };
+    bool selected = false;
+};
+
 struct LevelCamera
 {
     glm::vec3 position{ 0.0f, 2.0f, 6.0f };
@@ -37,6 +46,7 @@ struct LevelData
 {
     std::vector<LevelBrush> brushes;
     std::vector<LevelModel> models;
+    std::vector<LevelLight> lights;
     bool hasSettings = false;
     RenderSettings settings;
     bool hasCamera = false;
@@ -45,7 +55,8 @@ struct LevelData
 
 inline bool sameContent(const LevelData& a, const LevelData& b)
 {
-    if (a.brushes.size() != b.brushes.size() || a.models.size() != b.models.size())
+    if (a.brushes.size() != b.brushes.size() || a.models.size() != b.models.size() ||
+        a.lights.size() != b.lights.size())
     {
         return false;
     }
@@ -58,6 +69,15 @@ inline bool sameContent(const LevelData& a, const LevelData& b)
         const LevelBrush& x = a.brushes[i];
         const LevelBrush& y = b.brushes[i];
         if (x.name != y.name || !(x.def == y.def) || x.position != y.position || x.yawDegrees != y.yawDegrees)
+        {
+            return false;
+        }
+    }
+    for (size_t i = 0; i < a.lights.size(); i++)
+    {
+        const LevelLight& x = a.lights[i];
+        const LevelLight& y = b.lights[i];
+        if (x.name != y.name || !(x.def == y.def) || x.position != y.position)
         {
             return false;
         }

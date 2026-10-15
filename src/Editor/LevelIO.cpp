@@ -43,6 +43,11 @@ bool saveLevelFile(const std::string& path, const LevelData& level, std::string&
         entry["color"] = toJson(brush.def.color);
         entry["roughness"] = brush.def.roughness;
         entry["metallic"] = brush.def.metallic;
+        if (!brush.def.texture.empty())
+        {
+            entry["texture"] = brush.def.texture;
+            entry["textureScale"] = brush.def.textureScale;
+        }
         entry["position"] = toJson(brush.position);
         entry["yaw"] = brush.yawDegrees;
         brushes.push_back(entry);
@@ -61,6 +66,20 @@ bool saveLevelFile(const std::string& path, const LevelData& level, std::string&
         models.push_back(entry);
     }
     root["models"] = models;
+
+    Json lights = Json::array();
+    for (const LevelLight& light : level.lights)
+    {
+        Json entry;
+        entry["name"] = light.name;
+        entry["position"] = toJson(light.position);
+        entry["color"] = toJson(light.def.color);
+        entry["intensity"] = light.def.intensity;
+        entry["radius"] = light.def.radius;
+        entry["enabled"] = light.def.enabled;
+        lights.push_back(entry);
+    }
+    root["lights"] = lights;
 
     if (level.hasSettings)
     {
@@ -152,6 +171,8 @@ bool loadLevelFile(const std::string& path, LevelData& level, std::string& error
                 brush.def.color = toVec3(entry.value("color", Json()), brush.def.color);
                 brush.def.roughness = entry.value("roughness", brush.def.roughness);
                 brush.def.metallic = entry.value("metallic", brush.def.metallic);
+                brush.def.texture = entry.value("texture", std::string());
+                brush.def.textureScale = std::clamp(entry.value("textureScale", brush.def.textureScale), 0.1f, 100.0f);
                 brush.position = toVec3(entry.value("position", Json()), glm::vec3(0.0f));
                 brush.yawDegrees = entry.value("yaw", 0.0f);
                 loaded.brushes.push_back(brush);
@@ -172,6 +193,21 @@ bool loadLevelFile(const std::string& path, LevelData& level, std::string& error
                 {
                     loaded.models.push_back(model);
                 }
+            }
+        }
+
+        if (root.contains("lights"))
+        {
+            for (const Json& entry : root["lights"])
+            {
+                LevelLight light;
+                light.name = entry.value("name", std::string("Light"));
+                light.position = toVec3(entry.value("position", Json()), glm::vec3(0.0f));
+                light.def.color = toVec3(entry.value("color", Json()), light.def.color);
+                light.def.intensity = entry.value("intensity", light.def.intensity);
+                light.def.radius = entry.value("radius", light.def.radius);
+                light.def.enabled = entry.value("enabled", light.def.enabled);
+                loaded.lights.push_back(light);
             }
         }
 

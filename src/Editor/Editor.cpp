@@ -13,6 +13,28 @@ Editor::Editor(EditorHost& host)
     : m_host(host)
 {
     refreshLevelList();
+    refreshTextureList();
+}
+
+void Editor::refreshTextureList()
+{
+    m_textureNames = m_host.textureNames();
+}
+
+void Editor::addLight()
+{
+    glm::vec3 point = m_host.spawnPoint();
+
+    LevelLight light;
+    light.name = "Light " + std::to_string(m_nextLight++);
+    light.position = glm::vec3(std::round(point.x / m_gridSize) * m_gridSize, 2.5f,
+                               std::round(point.z / m_gridSize) * m_gridSize);
+
+    m_host.clearSelection();
+    if (!m_host.spawnLight(light, true))
+    {
+        m_status = "Could not create the light";
+    }
 }
 
 std::string Editor::levelPath(const std::string& name) const
@@ -213,6 +235,10 @@ void Editor::restoreState(const LevelData& state)
     {
         m_host.spawnBrush(brush, brush.selected);
     }
+    for (const LevelLight& light : state.lights)
+    {
+        m_host.spawnLight(light, light.selected);
+    }
     m_host.applyEnvironment(state);
 
     m_history.setCurrent(captureState());
@@ -288,6 +314,9 @@ bool Editor::execute(EditorCommand command)
         return true;
     case EditorCommand::Save:
         saveLevel();
+        return true;
+    case EditorCommand::AddLight:
+        addLight();
         return true;
     }
     return false;
@@ -378,10 +407,18 @@ void Editor::loadLevel(const std::string& name)
             failed++;
         }
     }
+    for (const LevelLight& light : level.lights)
+    {
+        if (!m_host.spawnLight(light, false))
+        {
+            failed++;
+        }
+    }
 
     m_host.applyEnvironment(level);
 
     m_nextBrush = static_cast<int>(level.brushes.size()) + 1;
+    m_nextLight = static_cast<int>(level.lights.size()) + 1;
     std::snprintf(m_levelName, sizeof(m_levelName), "%s", name.c_str());
     m_status = "Loaded " + name;
     if (failed > 0)
@@ -411,6 +448,8 @@ void Editor::drawBrushSection()
     ImGui::ColorEdit3("Color", &m_newBrush.color.x);
     ImGui::SliderFloat("Roughness", &m_newBrush.roughness, 0.05f, 1.0f, "%.2f");
     ImGui::SliderFloat("Metallic", &m_newBrush.metallic, 0.0f, 1.0f, "%.2f");
+    ImGui::TextDisabled("New brushes use the texture chosen here");
+    drawTextureControls(m_newBrush, "##new");
 
     if (ImGui::Button("Add brush"))
     {
@@ -445,14 +484,19 @@ void Editor::drawSelectedBrushSection()
     int count = m_host.selectionCount();
     if (count == 0)
     {
-        ImGui::TextDisabled("Click a block to select it, Shift-click to add more");
+        ImGui::TextDisabled("Click a block or light to select it, Shift-click to add more");
         return;
     }
 
     BrushDef* brush = count == 1 ? m_host.selectedBrush() : nullptr;
+    LightDef* light = count == 1 ? m_host.selectedLight() : nullptr;
     if (brush)
     {
         drawBrushProperties(*brush);
+    }
+    else if (light)
+    {
+        drawLightProperties(*light);
     }
     else if (count > 1)
     {
@@ -500,11 +544,113 @@ void Editor::drawBrushProperties(BrushDef& brush)
     changed |= ImGui::ColorEdit3("Color##selected", &brush.color.x);
     changed |= ImGui::SliderFloat("Roughness##selected", &brush.roughness, 0.05f, 1.0f, "%.2f");
     changed |= ImGui::SliderFloat("Metallic##selected", &brush.metallic, 0.0f, 1.0f, "%.2f");
+    changed |= drawTextureControls(brush, "##selected");
 
     if (changed)
     {
         m_host.applySelectedBrush();
     }
+}
+
+bool Editor::drawTextureControls(BrushDef& brush, const char* suffix)
+{
+    bool changed = false;
+
+    ImGui::Separator();
+    ImGui::Text("Texture: %s", brush.texture.empty() ? "None (plain color)" : brush.texture.c_str());
+    ImGui::TextDisabled("Click a name below to apply it");
+
+    std::vector<std::string> options;
+    options.push_back("None");
+    options.insert(options.end(), m_textureNames.begin(), m_textureNames.end());
+
+    float available = ImGui::GetContentRegionAvail().x;
+    float used = 0.0f;
+    const ImGuiStyle& style = ImGui::GetStyle();
+
+    for (size_t i = 0; i < options.size(); i++)
+    {
+        const std::string& name = options[i];
+        bool none = i == 0;
+        bool active = none ? brush.texture.empty() : brush.texture == name;
+
+        float width = ImGui::CalcTextSize(name.c_str()).x + style.FramePadding.x * 2.0f;
+        if (i > 0)
+        {
+            if (used + style.ItemSpacing.x + width <= available)
+            {
+                ImGui::SameLine();
+                used += style.ItemSpacing.x;
+            }
+            else
+            {
+                used = 0.0f;
+            }
+        }
+        used += width;
+
+        if (active)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.12f, 0.12f, 1.0f));
+        }
+        std::string id = name + suffix;
+        if (ImGui::Button(id.c_str()))
+        {
+            brush.texture = none ? std::string() : name;
+            changed = true;
+        }
+        if (active)
+        {
+            ImGui::PopStyleColor();
+        }
+    }
+
+    if (!brush.texture.empty())
+    {
+        std::string tileLabel = std::string("Tile size") + suffix;
+        changed |= ImGui::DragFloat(tileLabel.c_str(), &brush.textureScale, 0.05f, 0.1f, 100.0f, "%.2f m");
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("World-space length of one texture repeat, so the pattern keeps its scale when a brush is resized");
+        }
+    }
+    ImGui::Separator();
+    return changed;
+}
+
+void Editor::drawLightProperties(LightDef& light)
+{
+    ImGui::Checkbox("Enabled##light", &light.enabled);
+    ImGui::ColorEdit3("Color##light", &light.color.x);
+    ImGui::DragFloat("Intensity##light", &light.intensity, 0.25f, 0.0f, 1000.0f, "%.1f");
+    ImGui::DragFloat("Radius##light", &light.radius, 0.1f, 0.5f, 200.0f, "%.1f m");
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Distance at which the light fades to nothing");
+    }
+}
+
+void Editor::drawLightSection()
+{
+    if (ImGui::Button("Add light"))
+    {
+        addLight();
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Place a point light 2.5 m above where the camera is looking (L). Drag it to move, edit its height in the Scene tab");
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Show markers", &m_showLightMarkers))
+    {
+        m_host.setLightMarkersVisible(m_showLightMarkers);
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Hide the light gizmos to preview the level. Lights keep shining");
+    }
+    ImGui::TextDisabled("The 16 lights nearest the camera are rendered. Point lights do not cast shadows");
 }
 
 void Editor::drawLevelSection()
@@ -540,12 +686,14 @@ void Editor::drawLevelSection()
     {
         m_host.clearLevel();
         m_nextBrush = 1;
+        m_nextLight = 1;
         m_status = "Cleared the scene";
     }
     ImGui::SameLine();
     if (ImGui::SmallButton("Refresh"))
     {
         refreshLevelList();
+        refreshTextureList();
     }
 
     if (m_levelFiles.empty())
@@ -576,7 +724,11 @@ void Editor::drawPanel()
     {
         drawBrushSection();
     }
-    if (ImGui::CollapsingHeader("Selected brush", ImGuiTreeNodeFlags_DefaultOpen))
+    if (ImGui::CollapsingHeader("Lights", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        drawLightSection();
+    }
+    if (ImGui::CollapsingHeader("Selection", ImGuiTreeNodeFlags_DefaultOpen))
     {
         drawSelectedBrushSection();
     }

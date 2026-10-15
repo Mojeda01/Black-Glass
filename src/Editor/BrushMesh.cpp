@@ -84,7 +84,7 @@ namespace
     }
 }
 
-MeshData buildBrushMesh(const BrushDef& def)
+MeshData buildBrushMesh(const BrushDef& def, const ImageData* texture)
 {
     MeshData mesh;
 
@@ -104,12 +104,63 @@ MeshData buildBrushMesh(const BrushDef& def)
     Material material;
     material.params.baseColorFactor = glm::vec4(def.color, 1.0f);
     material.params.factors = glm::vec4(def.metallic, def.roughness, 1.0f, 1.0f);
+
+    bool textured = texture && !texture->pixels.empty() && !def.texture.empty();
+    material.params.worldUV = glm::vec4(textured ? 1.0f : 0.0f, def.textureScale, 0.0f, 0.0f);
+    if (textured)
+    {
+        mesh.images.push_back(*texture);
+        mesh.samplers.push_back(SamplerData{});
+        TextureData data;
+        data.image = 0;
+        data.sampler = 0;
+        data.srgb = true;
+        mesh.textures.push_back(data);
+        material.textures[0] = 0;
+        material.params.flags0.x = 1;
+    }
     mesh.materials.push_back(material);
 
     Primitive primitive{};
     primitive.firstIndex = 0;
     primitive.indexCount = static_cast<uint32_t>(mesh.indices.size());
     primitive.materialIndex = 0;
+    mesh.primitives.push_back(primitive);
+
+    return mesh;
+}
+
+MeshData buildLightMarkerMesh()
+{
+    MeshData mesh;
+
+    const float s = 0.2f;
+    const glm::vec3 center(0.0f, s, 0.0f);
+    for (int sx = -1; sx <= 1; sx += 2)
+    {
+        for (int sy = -1; sy <= 1; sy += 2)
+        {
+            for (int sz = -1; sz <= 1; sz += 2)
+            {
+                glm::vec3 a = center + glm::vec3(static_cast<float>(sx) * s, 0.0f, 0.0f);
+                glm::vec3 b = center + glm::vec3(0.0f, static_cast<float>(sy) * s, 0.0f);
+                glm::vec3 c = center + glm::vec3(0.0f, 0.0f, static_cast<float>(sz) * s);
+                addPolygon(mesh, { a, b, c },
+                           glm::normalize(glm::vec3(static_cast<float>(sx), static_cast<float>(sy), static_cast<float>(sz))));
+            }
+        }
+    }
+
+    Material material;
+    material.params.baseColorFactor = glm::vec4(0.02f, 0.02f, 0.02f, 1.0f);
+    material.params.factors = glm::vec4(0.0f, 1.0f, 1.0f, 1.0f);
+    mesh.materials.push_back(material);
+
+    Primitive primitive{};
+    primitive.firstIndex = 0;
+    primitive.indexCount = static_cast<uint32_t>(mesh.indices.size());
+    primitive.materialIndex = 0;
+    primitive.castsShadow = false;
     mesh.primitives.push_back(primitive);
 
     return mesh;

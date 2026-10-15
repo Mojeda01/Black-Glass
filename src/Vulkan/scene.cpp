@@ -165,7 +165,7 @@ void BlackGlass::refreshScene()
     for (auto& model : M_MODELS)
     {
         updateModelTransform(*model);
-        if (!model->visible || model->ghost)
+        if (!model->visible || model->ghost || model->light)
         {
             continue;
         }
@@ -280,6 +280,17 @@ void BlackGlass::replaceAssetMesh(ModelAsset& asset, MeshData& mesh)
     destroyBuffer(asset.vertexBuffer);
     destroyBuffer(asset.indexBuffer);
     destroyBuffer(asset.materialBuffer);
+    for (auto& image : asset.textureImages)
+    {
+        destroyImage(image);
+    }
+    asset.textureImages.clear();
+    asset.textures.clear();
+    for (VkSampler sampler : asset.samplers)
+    {
+        vkDestroySampler(M_DEVICE, sampler, nullptr);
+    }
+    asset.samplers.clear();
     asset.materials.clear();
     asset.primitives.clear();
 
