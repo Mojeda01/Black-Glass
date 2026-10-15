@@ -48,7 +48,7 @@ void Editor::addBrush()
     glm::vec3 point = m_host.spawnPoint();
 
     LevelBrush brush;
-    brush.name = "Brush " + std::to_string(m_nextBrush++);
+    brush.name = std::string(BRUSH_SHAPE_NAMES[static_cast<int>(m_newBrush.shape)]) + " " + std::to_string(m_nextBrush++);
     brush.def = m_newBrush;
     brush.position = glm::vec3(snapCenter(point.x, m_newBrush.size.x), 0.0f,
                                snapCenter(point.z, m_newBrush.size.z));
@@ -62,10 +62,11 @@ void Editor::addBrush()
 void Editor::createBrushFromBounds(const BrushBounds& bounds)
 {
     LevelBrush brush;
-    brush.name = "Brush " + std::to_string(m_nextBrush++);
+    brush.name = std::string(BRUSH_SHAPE_NAMES[static_cast<int>(m_newBrush.shape)]) + " " + std::to_string(m_nextBrush++);
     brush.def = m_newBrush;
     brush.def.size = bounds.size;
     brush.position = bounds.center;
+    brush.yawDegrees = bounds.yawDegrees;
 
     if (!m_host.spawnBrush(brush, true))
     {
@@ -125,7 +126,7 @@ void Editor::update(bool overlayVisible)
 
     BrushBounds bounds;
     if (m_tool.update(view, hasRay, origin, direction, free, surface, snaps, m_gridSize,
-                      overlayVisible, m_host.debug(), bounds, label))
+                      overlayVisible, m_newBrush, m_host.debug(), bounds, label))
     {
         createBrushFromBounds(bounds);
     }
@@ -262,18 +263,27 @@ void Editor::drawBrushSection()
         ImGui::SetTooltip("New brushes snap to this grid, size fields step by it");
     }
 
+    int newShape = static_cast<int>(m_newBrush.shape);
+    if (ImGui::Combo("Shape", &newShape, BRUSH_SHAPE_NAMES, BRUSH_SHAPE_COUNT))
+    {
+        m_newBrush.shape = static_cast<BrushShape>(newShape);
+    }
+    if (m_newBrush.shape == BrushShape::Stairs)
+    {
+        ImGui::SliderInt("Steps", &m_newBrush.steps, 1, 32);
+    }
     ImGui::DragFloat3("Size", &m_newBrush.size.x, 0.05f, 0.05f, 1000.0f, "%.2f");
     ImGui::ColorEdit3("Color", &m_newBrush.color.x);
     ImGui::SliderFloat("Roughness", &m_newBrush.roughness, 0.05f, 1.0f, "%.2f");
     ImGui::SliderFloat("Metallic", &m_newBrush.metallic, 0.0f, 1.0f, "%.2f");
 
-    if (ImGui::Button("Add box"))
+    if (ImGui::Button("Add brush"))
     {
         addBrush();
     }
     if (ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip("Create a box where the camera is looking at the floor");
+        ImGui::SetTooltip("Create a brush where the camera is looking at the floor");
     }
 
     ImGui::SameLine();
@@ -291,7 +301,7 @@ void Editor::drawBrushSection()
     }
     if (ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip("Drag a footprint on the floor, release, move up for height, click to confirm");
+        ImGui::SetTooltip("Drag a footprint, release, move the mouse for height, click to confirm. Ramps and stairs rise toward the drag direction");
     }
     if (m_tool.armed())
     {
@@ -313,6 +323,16 @@ void Editor::drawSelectedBrushSection()
     }
 
     bool changed = false;
+    int shape = static_cast<int>(brush->shape);
+    if (ImGui::Combo("Shape##selected", &shape, BRUSH_SHAPE_NAMES, BRUSH_SHAPE_COUNT))
+    {
+        brush->shape = static_cast<BrushShape>(shape);
+        changed = true;
+    }
+    if (brush->shape == BrushShape::Stairs)
+    {
+        changed |= ImGui::SliderInt("Steps##selected", &brush->steps, 1, 32);
+    }
     changed |= ImGui::DragFloat3("Size##selected", &brush->size.x, 0.05f, 0.05f, 1000.0f, "%.2f");
     changed |= ImGui::ColorEdit3("Color##selected", &brush->color.x);
     changed |= ImGui::SliderFloat("Roughness##selected", &brush->roughness, 0.05f, 1.0f, "%.2f");
@@ -326,6 +346,15 @@ void Editor::drawSelectedBrushSection()
     if (ImGui::Button("Snap to grid"))
     {
         m_host.snapSelectedToGrid(m_gridSize);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Rotate 90"))
+    {
+        m_host.rotateSelected(90.0f);
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Turn the brush a quarter turn, which also changes which way a ramp or stairs rises");
     }
     ImGui::SameLine();
     if (ImGui::Button("Duplicate"))

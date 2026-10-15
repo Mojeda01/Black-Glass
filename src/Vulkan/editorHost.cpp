@@ -9,14 +9,57 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <map>
 #include <filesystem>
 #include <iostream>
 
 namespace
 {
+    bool sameGeometry(const BrushDef& a, const BrushDef& b)
+    {
+        if (a.shape != b.shape)
+        {
+            return false;
+        }
+        return a.shape != BrushShape::Stairs || a.steps == b.steps;
+    }
+
     bool sameMaterial(const BrushDef& a, const BrushDef& b)
     {
         return a.color == b.color && a.roughness == b.roughness && a.metallic == b.metallic;
+    }
+
+    bool sameAsset(const BrushDef& a, const BrushDef& b)
+    {
+        return sameGeometry(a, b) && sameMaterial(a, b);
+    }
+
+    bool rayTriangle(const glm::vec3& origin, const glm::vec3& direction,
+                     const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, float& t)
+    {
+        glm::vec3 edge1 = b - a;
+        glm::vec3 edge2 = c - a;
+        glm::vec3 p = glm::cross(direction, edge2);
+        float determinant = glm::dot(edge1, p);
+        if (std::abs(determinant) < 1e-9f)
+        {
+            return false;
+        }
+        float inverse = 1.0f / determinant;
+        glm::vec3 s = origin - a;
+        float u = glm::dot(s, p) * inverse;
+        if (u < 0.0f || u > 1.0f)
+        {
+            return false;
+        }
+        glm::vec3 q = glm::cross(s, edge1);
+        float v = glm::dot(direction, q) * inverse;
+        if (v < 0.0f || u + v > 1.0f)
+        {
+            return false;
+        }
+        t = glm::dot(edge2, q) * inverse;
+        return t > 1e-6f;
     }
 }
 
@@ -124,6 +167,36 @@ public:
             glm::vec3 localOrigin = glm::vec3(inverse * glm::vec4(origin, 1.0f));
             glm::vec3 localDirection = glm::vec3(inverse * glm::vec4(direction, 0.0f));
 
+            if (model->brush->shape != BrushShape::Box)
+            {
+                const MeshData& unit = unitMesh(*model->brush);
+                float shapeT = std::numeric_limits<float>::max();
+                glm::vec3 shapeNormal(0.0f, 1.0f, 0.0f);
+                for (size_t i = 0; i + 2 < unit.indices.size(); i += 3)
+                {
+                    const Vertex& v0 = unit.vertices[unit.indices[i]];
+                    const Vertex& v1 = unit.vertices[unit.indices[i + 1]];
+                    const Vertex& v2 = unit.vertices[unit.indices[i + 2]];
+                    float t = 0.0f;
+                    if (rayTriangle(localOrigin, localDirection, v0.pos, v1.pos, v2.pos, t) && t < shapeT)
+                    {
+                        shapeT = t;
+                        shapeNormal = v0.normal;
+                    }
+                }
+
+                if (shapeT < bestT)
+                {
+                    glm::vec3 worldNormal = glm::normalize(glm::transpose(glm::mat3(inverse)) * shapeNormal);
+                    bestT = shapeT;
+                    hit.hit = true;
+                    hit.point = origin + direction * shapeT;
+                    hit.normal = worldNormal;
+                    hit.baseY = worldNormal.y > 0.99f ? hit.point.y : model->worldMin.y;
+                }
+                continue;
+            }
+
             const glm::vec3 boxMin(-0.5f, 0.0f, -0.5f);
             const glm::vec3 boxMax(0.5f, 1.0f, 0.5f);
 
@@ -179,7 +252,7 @@ public:
             hit.hit = true;
             hit.point = origin + direction * tMin;
             hit.normal = worldNormal;
-            hit.baseY = worldNormal.y > 0.7f ? model->worldMax.y : model->worldMin.y;
+            hit.baseY = worldNormal.y > 0.99f ? hit.point.y : model->worldMin.y;
         }
 
         return hit.hit;
@@ -424,7 +497,7 @@ public:
         try
         {
             const BrushDef& def = *model->brush;
-            if (!sameMaterial(*model->asset->brush, def))
+            if (!sameAsset(*model->asset->brush, def))
             {
                 int users = 0;
                 for (const auto& other : m_engine.M_MODELS)
@@ -437,7 +510,18 @@ public:
 
                 if (users == 1)
                 {
-                    updateAssetMaterial(*model->asset, def);
+                    if (!sameGeometry(*model->asset->brush, def))
+                    {
+                        BrushDef unit = def;
+                        unit.size = glm::vec3(1.0f);
+                        MeshData mesh = buildBrushMesh(unit);
+                        m_engine.replaceAssetMesh(*model->asset, mesh);
+                        *model->asset->brush = unit;
+                    }
+                    else
+                    {
+                        updateAssetMaterial(*model->asset, def);
+                    }
                 }
                 else
                 {
@@ -505,6 +589,27 @@ public:
         return true;
     }
 
+    void rotateSelected(float degrees) override
+    {
+        Model* model = m_engine.m_selected;
+        if (!model || model->ghost)
+        {
+            return;
+        }
+
+        model->yawDegrees += degrees;
+        while (model->yawDegrees > 180.0f)
+        {
+            model->yawDegrees -= 360.0f;
+        }
+        while (model->yawDegrees < -180.0f)
+        {
+            model->yawDegrees += 360.0f;
+        }
+        m_engine.updateModelTransform(*model);
+        m_engine.deferShadowUpdate();
+    }
+
     void snapSelectedToGrid(float grid) override
     {
         Model* model = m_engine.m_selected;
@@ -527,12 +632,27 @@ public:
     }
 
 private:
+    const MeshData& unitMesh(const BrushDef& def) const
+    {
+        int steps = def.shape == BrushShape::Stairs ? def.steps : 0;
+        auto key = std::make_pair(static_cast<int>(def.shape), steps);
+        auto found = m_unitMeshes.find(key);
+        if (found == m_unitMeshes.end())
+        {
+            BrushDef unit;
+            unit.shape = def.shape;
+            unit.steps = def.steps;
+            found = m_unitMeshes.emplace(key, buildBrushMesh(unit)).first;
+        }
+        return found->second;
+    }
+
     int acquireBrushAsset(const BrushDef& def)
     {
         for (size_t i = 0; i < m_engine.M_LIBRARY.size(); i++)
         {
             const auto& asset = m_engine.M_LIBRARY[i];
-            if (asset->brush && sameMaterial(*asset->brush, def))
+            if (asset->brush && sameAsset(*asset->brush, def))
             {
                 return static_cast<int>(i);
             }
@@ -565,6 +685,7 @@ private:
     }
 
     BlackGlass& m_engine;
+    mutable std::map<std::pair<int, int>, MeshData> m_unitMeshes;
 };
 
 void BlackGlass::initEditor()

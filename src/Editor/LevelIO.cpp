@@ -37,7 +37,8 @@ bool saveLevelFile(const std::string& path, const LevelData& level, std::string&
     {
         Json entry;
         entry["name"] = brush.name;
-        entry["shape"] = "box";
+        entry["shape"] = BRUSH_SHAPE_NAMES[static_cast<int>(brush.def.shape)];
+        entry["steps"] = brush.def.steps;
         entry["size"] = toJson(brush.def.size);
         entry["color"] = toJson(brush.def.color);
         entry["roughness"] = brush.def.roughness;
@@ -138,6 +139,15 @@ bool loadLevelFile(const std::string& path, LevelData& level, std::string& error
             {
                 LevelBrush brush;
                 brush.name = entry.value("name", std::string("Brush"));
+                std::string shapeName = entry.value("shape", std::string("Box"));
+                for (int i = 0; i < BRUSH_SHAPE_COUNT; i++)
+                {
+                    if (shapeName == BRUSH_SHAPE_NAMES[i])
+                    {
+                        brush.def.shape = static_cast<BrushShape>(i);
+                    }
+                }
+                brush.def.steps = std::clamp(entry.value("steps", brush.def.steps), 1, 64);
                 brush.def.size = toVec3(entry.value("size", Json()), brush.def.size);
                 brush.def.color = toVec3(entry.value("color", Json()), brush.def.color);
                 brush.def.roughness = entry.value("roughness", brush.def.roughness);

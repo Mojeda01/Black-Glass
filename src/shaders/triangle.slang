@@ -115,7 +115,13 @@ VSOutput vertexMain(VSInput input)
     output.color = input.color;
     output.texCoord = input.texCoord;
     output.worldPos = world.xyz;
-    output.normal = mul(push.model, float4(input.normal, 0.0)).xyz;
+    float3 col0 = mul(push.model, float4(1.0, 0.0, 0.0, 0.0)).xyz;
+    float3 col1 = mul(push.model, float4(0.0, 1.0, 0.0, 0.0)).xyz;
+    float3 col2 = mul(push.model, float4(0.0, 0.0, 1.0, 0.0)).xyz;
+    float handed = dot(col0, cross(col1, col2)) < 0.0 ? -1.0 : 1.0;
+    output.normal = (cross(col1, col2) * input.normal.x
+                   + cross(col2, col0) * input.normal.y
+                   + cross(col0, col1) * input.normal.z) * handed;
     output.tangent = float4(mul(push.model, float4(input.tangent.xyz, 0.0)).xyz, input.tangent.w);
     float3 c0 = push.model[0].xyz;
     float3 c1 = push.model[1].xyz;

@@ -1,8 +1,11 @@
 #include "BrushTool.h"
+#include "BrushMesh.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+
+#include <glm/gtc/matrix_transform.hpp>
 
 namespace
 {
@@ -97,6 +100,25 @@ void BrushTool::onRelease()
     m_phase = Phase::Height;
 }
 
+float BrushTool::directionYaw() const
+{
+    if (m_def.shape == BrushShape::Box)
+    {
+        return 0.0f;
+    }
+
+    glm::vec2 delta = m_end - m_start;
+    if (std::abs(delta.x) < 1e-4f && std::abs(delta.y) < 1e-4f)
+    {
+        return 0.0f;
+    }
+    if (std::abs(delta.y) >= std::abs(delta.x))
+    {
+        return delta.y >= 0.0f ? 0.0f : 180.0f;
+    }
+    return delta.x >= 0.0f ? 90.0f : -90.0f;
+}
+
 BrushBounds BrushTool::currentBounds(float height) const
 {
     glm::vec2 lo = glm::min(m_start, m_end);
@@ -110,35 +132,62 @@ BrushBounds BrushTool::currentBounds(float height) const
         hi.y = lo.y + m_grid;
     }
 
+    float worldX = hi.x - lo.x;
+    float worldZ = hi.y - lo.y;
+    float yaw = directionYaw();
+    bool sideways = std::abs(std::abs(yaw) - 90.0f) < 1.0f;
+
     BrushBounds bounds;
     bounds.center = glm::vec3((lo.x + hi.x) * 0.5f, m_baseY, (lo.y + hi.y) * 0.5f);
-    bounds.size = glm::vec3(hi.x - lo.x, std::max(height, m_grid), hi.y - lo.y);
+    float h = std::max(height, m_grid);
+    bounds.size = sideways ? glm::vec3(worldZ, h, worldX) : glm::vec3(worldX, h, worldZ);
+    bounds.yawDegrees = yaw;
     return bounds;
 }
 
 void BrushTool::drawPreview(DebugDraw& debug, float height) const
 {
     BrushBounds bounds = currentBounds(height);
-    glm::vec3 lo(bounds.center.x - bounds.size.x * 0.5f, m_baseY, bounds.center.z - bounds.size.z * 0.5f);
-    glm::vec3 hi(bounds.center.x + bounds.size.x * 0.5f, m_baseY + bounds.size.y, bounds.center.z + bounds.size.z * 0.5f);
 
-    debug.box(lo, hi, EDGE_COLOR, false);
-    debug.box(lo, hi, EDGE_OVERLAY, true);
+    glm::mat4 transform = glm::translate(glm::mat4(1.0f), bounds.center)
+                        * glm::rotate(glm::mat4(1.0f), glm::radians(bounds.yawDegrees), glm::vec3(0.0f, 1.0f, 0.0f))
+                        * glm::scale(glm::mat4(1.0f), bounds.size);
+
+    drawBrushOutline(m_def, transform, debug, EDGE_COLOR, false);
+    drawBrushOutline(m_def, transform, debug, EDGE_OVERLAY, true);
+
+    float yaw = glm::radians(bounds.yawDegrees);
+    bool sideways = std::abs(std::abs(bounds.yawDegrees) - 90.0f) < 1.0f;
+    float halfX = (sideways ? bounds.size.z : bounds.size.x) * 0.5f;
+    float halfZ = (sideways ? bounds.size.x : bounds.size.z) * 0.5f;
 
     float y = m_baseY + LIFT;
-    glm::vec3 a(lo.x, y, lo.z);
-    glm::vec3 b(hi.x, y, lo.z);
-    glm::vec3 c(hi.x, y, hi.z);
-    glm::vec3 d(lo.x, y, hi.z);
+    glm::vec3 a(bounds.center.x - halfX, y, bounds.center.z - halfZ);
+    glm::vec3 b(bounds.center.x + halfX, y, bounds.center.z - halfZ);
+    glm::vec3 c(bounds.center.x + halfX, y, bounds.center.z + halfZ);
+    glm::vec3 d(bounds.center.x - halfX, y, bounds.center.z + halfZ);
     debug.line(a, b, FOOTPRINT_COLOR, true);
     debug.line(b, c, FOOTPRINT_COLOR, true);
     debug.line(c, d, FOOTPRINT_COLOR, true);
     debug.line(d, a, FOOTPRINT_COLOR, true);
+
+    if (m_def.shape != BrushShape::Box)
+    {
+        glm::vec3 forward(std::sin(yaw), 0.0f, std::cos(yaw));
+        glm::vec3 side(forward.z, 0.0f, -forward.x);
+        float reach = bounds.size.z * 0.5f;
+        glm::vec3 tail = glm::vec3(bounds.center.x, y, bounds.center.z) - forward * reach * 0.6f;
+        glm::vec3 head = glm::vec3(bounds.center.x, y, bounds.center.z) + forward * reach * 0.6f;
+        float wing = std::min(reach * 0.25f, 0.5f);
+        debug.line(tail, head, FOOTPRINT_COLOR, true);
+        debug.line(head, head - forward * wing + side * wing, FOOTPRINT_COLOR, true);
+        debug.line(head, head - forward * wing - side * wing, FOOTPRINT_COLOR, true);
+    }
 }
 
 bool BrushTool::update(const ViewInfo& view, bool hasRay, const glm::vec3& origin, const glm::vec3& direction,
                        bool cursorFree, const SurfaceHit& surface, const SnapSets& snaps, float grid,
-                       bool visible, DebugDraw& debug, BrushBounds& out, std::string& label)
+                       bool visible, const BrushDef& def, DebugDraw& debug, BrushBounds& out, std::string& label)
 {
     if (!m_armed)
     {
@@ -146,6 +195,7 @@ bool BrushTool::update(const ViewInfo& view, bool hasRay, const glm::vec3& origi
     }
 
     m_grid = std::max(grid, 0.01f);
+    m_def = def;
 
     switch (m_phase)
     {

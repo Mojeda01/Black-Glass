@@ -1,4 +1,5 @@
 #pragma once
+#include "Brush.h"
 #include "EditorTypes.h"
 #include "../Debug/DebugDraw.h"
 
@@ -10,6 +11,7 @@ struct BrushBounds
 {
     glm::vec3 center{ 0.0f };
     glm::vec3 size{ 1.0f };
+    float yawDegrees = 0.0f;
 };
 
 class BrushTool
@@ -25,7 +27,7 @@ public:
 
     bool update(const ViewInfo& view, bool hasRay, const glm::vec3& origin, const glm::vec3& direction,
                 bool cursorFree, const SurfaceHit& surface, const SnapSets& snaps, float grid,
-                bool visible, DebugDraw& debug, BrushBounds& out, std::string& label);
+                bool visible, const BrushDef& def, DebugDraw& debug, BrushBounds& out, std::string& label);
 
 private:
     enum class Phase
@@ -36,6 +38,7 @@ private:
     };
 
     BrushBounds currentBounds(float height) const;
+    float directionYaw() const;
     void drawPreview(DebugDraw& debug, float height) const;
 
     bool m_armed = false;
@@ -53,4 +56,5 @@ private:
     float m_cursorStartY = 0.0f;
     float m_pixelsPerUnit = 100.0f;
     float m_grid = 0.5f;
+    BrushDef m_def;
 };

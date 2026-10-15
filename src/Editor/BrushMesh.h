@@ -1,5 +1,9 @@
 #pragma once
 #include "Brush.h"
+#include "../Debug/DebugDraw.h"
 #include "../MeshData.h"
 
 MeshData buildBrushMesh(const BrushDef& def);
+
+void drawBrushOutline(const BrushDef& def, const glm::mat4& unitTransform, DebugDraw& debug,
+                      const glm::vec4& color, bool overlay);
