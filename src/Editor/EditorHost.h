@@ -52,5 +52,6 @@ public:
     virtual void applySelectedBrush() = 0;
     virtual bool duplicateSelected(const glm::vec3& offset) = 0;
     virtual void snapSelectedToGrid(float grid) = 0;
+    virtual void setVerticalSnap(float grid) = 0;
     virtual void rotateSelected(float degrees) = 0;
 };

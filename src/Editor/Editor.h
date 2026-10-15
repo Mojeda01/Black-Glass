@@ -5,6 +5,7 @@
 #include "EditorHost.h"
 #include "History.h"
 
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -45,6 +46,8 @@ public:
     void noteInput() { m_historyDirty = true; }
     bool dirty() const { return m_dirty; }
     const char* levelName() const { return m_levelName; }
+    bool saveCurrent();
+    void discardAutosave();
 
 private:
     void drawToolsPanel();
@@ -52,6 +55,8 @@ private:
     void drawInspectorPanel();
     void drawStatusBar(float framesPerSecond);
     void drawSaveAsPopup();
+    void drawUnsavedPopup();
+    void drawRecoverPopup();
     void drawBrushProperties(BrushDef& brush);
     void drawLightProperties(LightDef& light);
     void drawModelProperties(const ItemInfo& info);
@@ -73,8 +78,18 @@ private:
     void createBrushFromBounds(const BrushBounds& bounds);
     void drawGrid();
     void drawSelection();
-    void saveLevel();
+    bool saveLevel();
+    bool applyLevel(const std::string& path, const std::string& name, bool dirty);
     void loadLevel(const std::string& name);
+    void requestNewLevel();
+    void requestLoadLevel(const std::string& name);
+    void performPending();
+    void markDirty();
+    void tickAutosave();
+    void writeAutosave();
+    void removeAutosave(const std::string& name);
+    void findRecovery();
+    std::string autosavePath(const std::string& name) const;
     void refreshLevelList();
     std::string levelPath(const std::string& name) const;
     float snapCenter(float value, float size) const;
@@ -109,4 +124,19 @@ private:
     bool m_requestSaveAs = false;
     char m_saveAsName[64] = {};
     float m_fitSize = 10.0f;
+
+    enum class PendingAction
+    {
+        None,
+        New,
+        Open
+    };
+    PendingAction m_pending = PendingAction::None;
+    std::string m_pendingLevel;
+    bool m_requestUnsaved = false;
+
+    std::chrono::steady_clock::time_point m_lastAutosave = std::chrono::steady_clock::now();
+    bool m_autosaveCurrent = true;
+    std::string m_recoverName;
+    bool m_requestRecover = false;
 };

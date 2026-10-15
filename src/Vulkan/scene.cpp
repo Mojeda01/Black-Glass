@@ -197,7 +197,7 @@ void BlackGlass::refreshScene()
     glm::vec3 center = (lo + hi) * 0.5f;
     glm::vec3 extent = hi - lo;
     float footprint = std::max(extent.x, extent.z);
-    float groundY = lo.y - 0.0005f * std::max(extent.y, 0.01f);
+    float groundY = -0.001f;
     float radius = 12.0f * footprint;
 
     M_GROUNDPARAMS = glm::vec4(center.x, center.z, radius, 0.2f * largestFootprint);

@@ -187,7 +187,7 @@ public:
     void requestQuit();
     bool quitPromptOpen() const { return m_quitPrompt; }
     void cancelQuitPrompt() { m_quitPrompt = false; }
-    void onLeftPress(bool shiftHeld);
+    void onLeftPress(bool shiftHeld, bool altHeld);
     void onLeftRelease();
     void onRightPress();
     void onRightRelease();
@@ -349,6 +349,10 @@ private:
     int m_placingAsset = -1;
     bool m_dragging = false;
     glm::vec2 m_dragOffset{ 0.0f };
+    bool m_dragVertical = false;
+    float m_dragHeightOffset = 0.0f;
+    glm::vec3 m_dragPlaneNormal{ 0.0f, 0.0f, 1.0f };
+    float m_verticalSnap = 0.5f;
     bool m_flyHeld = false;
     std::string m_loadError;
     std::vector<std::string> m_assetFiles;

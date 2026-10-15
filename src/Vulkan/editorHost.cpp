@@ -918,6 +918,11 @@ public:
         m_engine.deferShadowUpdate();
     }
 
+    void setVerticalSnap(float grid) override
+    {
+        m_engine.m_verticalSnap = grid;
+    }
+
     void snapSelectedToGrid(float grid) override
     {
         if (grid <= 0.0f)

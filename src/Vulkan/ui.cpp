@@ -401,9 +401,33 @@ void BlackGlass::drawQuitPrompt()
     if (ImGui::BeginPopupModal("Quit Black Glass?", nullptr,
                                ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
     {
-        ImGui::Text("Are you sure you want to quit?");
+        bool unsaved = m_editor && m_editor->dirty();
+        if (unsaved)
+        {
+            ImGui::Text("\"%s\" has unsaved changes.", m_editor->levelName());
+        }
+        else
+        {
+            ImGui::Text("Are you sure you want to quit?");
+        }
         ImGui::Spacing();
-        if (ImGui::Button("Quit", ImVec2(120.0f, 0.0f)))
+        if (unsaved)
+        {
+            if (ImGui::Button("Save and quit", ImVec2(120.0f, 0.0f)))
+            {
+                if (m_editor->saveCurrent())
+                {
+                    glfwSetWindowShouldClose(m_window, GLFW_TRUE);
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Quit", ImVec2(120.0f, 0.0f)))
+            {
+                m_editor->discardAutosave();
+                glfwSetWindowShouldClose(m_window, GLFW_TRUE);
+            }
+        }
+        else if (ImGui::Button("Quit", ImVec2(120.0f, 0.0f)))
         {
             glfwSetWindowShouldClose(m_window, GLFW_TRUE);
         }

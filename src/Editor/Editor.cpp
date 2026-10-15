@@ -14,6 +14,7 @@ Editor::Editor(EditorHost& host)
 {
     refreshLevelList();
     refreshTextureList();
+    findRecovery();
 }
 
 void Editor::refreshTextureList()
@@ -42,6 +43,105 @@ std::string Editor::levelPath(const std::string& name) const
     return m_host.assetRoot() + "/levels/" + name + ".json";
 }
 
+std::string Editor::autosavePath(const std::string& name) const
+{
+    return m_host.assetRoot() + "/levels/" + name + ".autosave.json";
+}
+
+void Editor::markDirty()
+{
+    if (!m_dirty)
+    {
+        m_lastAutosave = std::chrono::steady_clock::now();
+    }
+    m_dirty = true;
+    m_autosaveCurrent = false;
+}
+
+void Editor::writeAutosave()
+{
+    if (m_levelName[0] == '\0')
+    {
+        return;
+    }
+    std::string error;
+    if (saveLevelFile(autosavePath(m_levelName), m_host.captureLevel(), error))
+    {
+        m_autosaveCurrent = true;
+    }
+    m_lastAutosave = std::chrono::steady_clock::now();
+}
+
+void Editor::tickAutosave()
+{
+    if (!m_dirty || m_autosaveCurrent || m_historyDirty)
+    {
+        return;
+    }
+    constexpr std::chrono::seconds INTERVAL(120);
+    if (std::chrono::steady_clock::now() - m_lastAutosave >= INTERVAL)
+    {
+        writeAutosave();
+    }
+}
+
+void Editor::removeAutosave(const std::string& name)
+{
+    std::error_code error;
+    std::filesystem::remove(autosavePath(name), error);
+}
+
+void Editor::discardAutosave()
+{
+    removeAutosave(m_levelName);
+}
+
+void Editor::findRecovery()
+{
+    namespace fs = std::filesystem;
+    m_recoverName.clear();
+
+    std::error_code error;
+    fs::path directory = fs::path(m_host.assetRoot()) / "levels";
+    fs::file_time_type newest{};
+    for (fs::directory_iterator it(directory, error), end; !error && it != end; it.increment(error))
+    {
+        if (!it->is_regular_file() || it->path().extension() != ".json")
+        {
+            continue;
+        }
+        std::string stem = it->path().stem().string();
+        if (stem.size() <= 9 || stem.compare(stem.size() - 9, 9, ".autosave") != 0)
+        {
+            continue;
+        }
+        std::string base = stem.substr(0, stem.size() - 9);
+
+        std::error_code timeError;
+        fs::file_time_type autosaveTime = fs::last_write_time(it->path(), timeError);
+        if (timeError)
+        {
+            continue;
+        }
+        fs::path saved = fs::path(levelPath(base));
+        if (fs::exists(saved, timeError))
+        {
+            fs::file_time_type savedTime = fs::last_write_time(saved, timeError);
+            if (!timeError && savedTime >= autosaveTime)
+            {
+                fs::remove(it->path(), timeError);
+                continue;
+            }
+        }
+        if (m_recoverName.empty() || autosaveTime > newest)
+        {
+            m_recoverName = base;
+            newest = autosaveTime;
+        }
+    }
+    m_requestRecover = !m_recoverName.empty();
+}
+
 float Editor::snapCenter(float value, float size) const
 {
     float half = size * 0.5f;
@@ -59,7 +159,12 @@ void Editor::refreshLevelList()
     {
         if (it->is_regular_file() && it->path().extension() == ".json")
         {
-            m_levelFiles.push_back(it->path().stem().string());
+            std::string stem = it->path().stem().string();
+            if (stem.size() > 9 && stem.compare(stem.size() - 9, 9, ".autosave") == 0)
+            {
+                continue;
+            }
+            m_levelFiles.push_back(stem);
         }
     }
     std::sort(m_levelFiles.begin(), m_levelFiles.end());
@@ -133,6 +238,7 @@ void Editor::update(bool overlayVisible)
 {
     ViewInfo view;
     m_host.viewInfo(view);
+    m_host.setVerticalSnap(m_gridSize);
 
     glm::vec3 origin(0.0f);
     glm::vec3 direction(0.0f, -1.0f, 0.0f);
@@ -187,6 +293,7 @@ void Editor::update(bool overlayVisible)
     }
 
     trackHistory(overlayVisible);
+    tickAutosave();
 }
 
 LevelData Editor::captureState() const
@@ -223,7 +330,7 @@ void Editor::flushHistory()
 {
     if (m_history.observe(captureState()))
     {
-        m_dirty = true;
+        markDirty();
     }
     m_historyDirty = false;
 }
@@ -247,7 +354,7 @@ void Editor::restoreState(const LevelData& state)
 
     m_history.setCurrent(captureState());
     m_historyDirty = false;
-    m_dirty = true;
+    markDirty();
 }
 
 bool Editor::undo()
@@ -380,13 +487,18 @@ bool Editor::cancelTool()
     return m_tool.cancel();
 }
 
-void Editor::saveLevel()
+bool Editor::saveCurrent()
+{
+    return saveLevel();
+}
+
+bool Editor::saveLevel()
 {
     std::string name = m_levelName;
     if (name.empty())
     {
         m_status = "Enter a level name first";
-        return;
+        return false;
     }
 
     std::string error;
@@ -395,22 +507,23 @@ void Editor::saveLevel()
     {
         m_status = "Saved " + name;
         m_dirty = false;
+        m_autosaveCurrent = true;
+        removeAutosave(name);
         refreshLevelList();
+        return true;
     }
-    else
-    {
-        m_status = error;
-    }
+    m_status = error;
+    return false;
 }
 
-void Editor::loadLevel(const std::string& name)
+bool Editor::applyLevel(const std::string& path, const std::string& name, bool dirty)
 {
     LevelData level;
     std::string error;
-    if (!loadLevelFile(levelPath(name), level, error))
+    if (!loadLevelFile(path, level, error))
     {
         m_status = error;
-        return;
+        return false;
     }
 
     m_host.clearLevel();
@@ -445,19 +558,70 @@ void Editor::loadLevel(const std::string& name)
     std::snprintf(m_levelName, sizeof(m_levelName), "%s", name.c_str());
     flushHistory();
     m_dirty = false;
+    m_autosaveCurrent = true;
+    if (dirty)
+    {
+        markDirty();
+    }
     m_status = "Loaded " + name;
     if (failed > 0)
     {
         m_status += " (" + std::to_string(failed) + " items failed to load)";
     }
+    return true;
+}
+
+void Editor::loadLevel(const std::string& name)
+{
+    removeAutosave(m_levelName);
+    applyLevel(levelPath(name), name, false);
 }
 
 void Editor::newLevel()
 {
+    removeAutosave(m_levelName);
     m_host.clearLevel();
     m_nextBrush = 1;
     m_nextLight = 1;
     flushHistory();
     m_dirty = false;
+    m_autosaveCurrent = true;
     m_status = "Cleared the scene";
+}
+
+void Editor::requestNewLevel()
+{
+    m_pending = PendingAction::New;
+    if (m_dirty)
+    {
+        m_requestUnsaved = true;
+        return;
+    }
+    performPending();
+}
+
+void Editor::requestLoadLevel(const std::string& name)
+{
+    m_pending = PendingAction::Open;
+    m_pendingLevel = name;
+    if (m_dirty)
+    {
+        m_requestUnsaved = true;
+        return;
+    }
+    performPending();
+}
+
+void Editor::performPending()
+{
+    PendingAction action = m_pending;
+    m_pending = PendingAction::None;
+    if (action == PendingAction::New)
+    {
+        newLevel();
+    }
+    else if (action == PendingAction::Open)
+    {
+        loadLevel(m_pendingLevel);
+    }
 }

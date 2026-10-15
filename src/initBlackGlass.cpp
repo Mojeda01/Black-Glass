@@ -86,7 +86,7 @@ void initBlackGlass() {
                     }
                     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
                     {
-                        r->onLeftPress((mods & GLFW_MOD_SHIFT) != 0);
+                        r->onLeftPress((mods & GLFW_MOD_SHIFT) != 0, (mods & GLFW_MOD_ALT) != 0);
                     }
                     else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
                     {

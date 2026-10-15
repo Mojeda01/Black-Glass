@@ -82,7 +82,7 @@ void Editor::drawFileMenu()
 {
     if (ImGui::MenuItem("New level"))
     {
-        newLevel();
+        requestNewLevel();
     }
 
     if (ImGui::BeginMenu("Open level"))
@@ -96,7 +96,7 @@ void Editor::drawFileMenu()
         {
             if (ImGui::MenuItem(name.c_str()))
             {
-                loadLevel(name);
+                requestLoadLevel(name);
             }
         }
         ImGui::EndMenu();
@@ -255,6 +255,8 @@ void Editor::drawPanels(float framesPerSecond)
     drawStatusBar(framesPerSecond);
 
     drawSaveAsPopup();
+    drawUnsavedPopup();
+    drawRecoverPopup();
 }
 
 void Editor::drawToolsPanel()
@@ -266,7 +268,7 @@ void Editor::drawToolsPanel()
     {
         m_tool.disarm();
     }
-    hint("Click blocks to select them. Shift-click adds to the selection");
+    hint("Click blocks to select them. Shift-click adds to the selection. Alt-drag moves the selection up and down");
     ImGui::SameLine();
     if (toggleButton("Draw  (B)", m_tool.armed(), ImVec2(half, 0.0f)))
     {
@@ -827,6 +829,77 @@ void Editor::drawSaveAsPopup()
         ImGui::SameLine();
         if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)))
         {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+void Editor::drawUnsavedPopup()
+{
+    if (m_requestUnsaved)
+    {
+        ImGui::OpenPopup("Unsaved changes");
+        m_requestUnsaved = false;
+    }
+
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Unsaved changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::Text("Save changes to \"%s\" before continuing?", m_levelName);
+        ImGui::Spacing();
+        if (ImGui::Button("Save", ImVec2(120.0f, 0.0f)))
+        {
+            if (saveLevel())
+            {
+                performPending();
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Don't save", ImVec2(120.0f, 0.0f)))
+        {
+            performPending();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)))
+        {
+            m_pending = PendingAction::None;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+void Editor::drawRecoverPopup()
+{
+    if (m_requestRecover)
+    {
+        ImGui::OpenPopup("Recover level");
+        m_requestRecover = false;
+    }
+
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Recover level", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::Text("An autosave of \"%s\" is newer than the saved level.", m_recoverName.c_str());
+        ImGui::Text("Recover it?");
+        ImGui::Spacing();
+        if (ImGui::Button("Recover", ImVec2(120.0f, 0.0f)))
+        {
+            if (applyLevel(autosavePath(m_recoverName), m_recoverName, true))
+            {
+                m_status = "Recovered autosave of " + m_recoverName;
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Discard", ImVec2(120.0f, 0.0f)))
+        {
+            removeAutosave(m_recoverName);
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();

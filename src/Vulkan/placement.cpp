@@ -42,6 +42,23 @@ bool intersectBox(const glm::vec3& origin, const glm::vec3& direction,
     return true;
 }
 
+bool intersectVerticalPlane(const glm::vec3& origin, const glm::vec3& direction,
+                            const glm::vec3& point, const glm::vec3& normal, float& hitY)
+{
+    float denominator = glm::dot(direction, normal);
+    if (std::abs(denominator) < 1e-5f)
+    {
+        return false;
+    }
+    float t = glm::dot(point - origin, normal) / denominator;
+    if (t <= 0.0f)
+    {
+        return false;
+    }
+    hitY = origin.y + direction.y * t;
+    return true;
+}
+
 bool intersectGround(const glm::vec3& origin, const glm::vec3& direction, float planeY, glm::vec3& hit)
 {
     if (direction.y > -1e-5f)
@@ -278,7 +295,33 @@ void BlackGlass::updateInteraction()
         glm::vec3 origin;
         glm::vec3 direction;
         glm::vec3 hit;
-        if (cursorRay(origin, direction) && intersectGround(origin, direction, m_selected->position.y, hit))
+        if (m_dragVertical)
+        {
+            float hitY = 0.0f;
+            if (cursorRay(origin, direction) &&
+                intersectVerticalPlane(origin, direction, m_selected->position, m_dragPlaneNormal, hitY))
+            {
+                float target = hitY + m_dragHeightOffset;
+                if (m_verticalSnap > 0.0f)
+                {
+                    target = std::round(target / m_verticalSnap) * m_verticalSnap;
+                }
+                float deltaY = target - m_selected->position.y;
+                if (deltaY != 0.0f)
+                {
+                    for (Model* model : m_selection)
+                    {
+                        if (model->locked)
+                        {
+                            continue;
+                        }
+                        model->position.y += deltaY;
+                        updateModelTransform(*model);
+                    }
+                }
+            }
+        }
+        else if (cursorRay(origin, direction) && intersectGround(origin, direction, m_selected->position.y, hit))
         {
             float deltaX = hit.x + m_dragOffset.x - m_selected->position.x;
             float deltaZ = hit.z + m_dragOffset.y - m_selected->position.z;
@@ -296,7 +339,7 @@ void BlackGlass::updateInteraction()
     }
 }
 
-void BlackGlass::onLeftPress(bool shiftHeld)
+void BlackGlass::onLeftPress(bool shiftHeld, bool altHeld)
 {
     if (m_mouseCaptured || uiWantsMouse())
     {
@@ -359,7 +402,20 @@ void BlackGlass::onLeftPress(bool shiftHeld)
         selectOnly(picked);
     }
 
-    if (m_selected && picked && isSelected(picked))
+    m_dragVertical = false;
+    if (m_selected && picked && isSelected(picked) && altHeld && !shiftHeld)
+    {
+        glm::vec3 flat(origin.x - m_selected->position.x, 0.0f, origin.z - m_selected->position.z);
+        m_dragPlaneNormal = glm::length(flat) > 1e-4f ? glm::normalize(flat) : glm::vec3(0.0f, 0.0f, 1.0f);
+        float hitY = 0.0f;
+        if (intersectVerticalPlane(origin, direction, m_selected->position, m_dragPlaneNormal, hitY))
+        {
+            m_dragHeightOffset = m_selected->position.y - hitY;
+            m_dragVertical = true;
+            m_dragging = true;
+        }
+    }
+    else if (m_selected && picked && isSelected(picked))
     {
         glm::vec3 hit;
         if (intersectGround(origin, direction, m_selected->position.y, hit))
