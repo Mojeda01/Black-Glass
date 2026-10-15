@@ -51,6 +51,16 @@ void BlackGlass::drawFrame()
     {
         purgeUnusedBrushAssets();
     }
+    m_debugDraw.clear();
+    if (m_editor)
+    {
+        m_editor->update(m_showUi);
+    }
+    if (m_shadowRefreshPending && glfwGetTime() >= m_shadowRefreshTime)
+    {
+        m_shadowRefreshPending = false;
+        m_shadowDirty = true;
+    }
     if (m_shadowDirty)
     {
         vkDeviceWaitIdle(M_DEVICE);
@@ -202,12 +212,17 @@ void BlackGlass::cleanup()
         M_TIMESTAMPPOOL = VK_NULL_HANDLE;
     }
 
-    for (VkPipeline pipeline : { M_PREPASSPIPELINE, M_SSAOPIPELINE, M_SSAOBLURPIPELINE, M_SKYPIPELINE, M_TRANSMISSIONPIPELINE, M_BLENDPIPELINE, M_BLOOMDOWNPIPELINE, M_BLOOMUPPIPELINE, M_COMPOSITEPIPELINE })
+    for (VkPipeline pipeline : { M_PREPASSPIPELINE, M_SSAOPIPELINE, M_SSAOBLURPIPELINE, M_SKYPIPELINE, M_TRANSMISSIONPIPELINE, M_BLENDPIPELINE, M_BLOOMDOWNPIPELINE, M_BLOOMUPPIPELINE, M_COMPOSITEPIPELINE, M_DEBUGLINEPIPELINE, M_DEBUGOVERLAYPIPELINE })
     {
         if (pipeline != VK_NULL_HANDLE)
         {
             vkDestroyPipeline(M_DEVICE, pipeline, nullptr);
         }
+    }
+
+    for (AllocatedBuffer& buffer : M_DEBUGLINEBUFFERS)
+    {
+        destroyBuffer(buffer);
     }
 
     if (M_POINTSAMPLER != VK_NULL_HANDLE)

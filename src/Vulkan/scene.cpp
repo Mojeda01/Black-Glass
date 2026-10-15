@@ -289,6 +289,12 @@ void BlackGlass::replaceAssetMesh(ModelAsset& asset, MeshData& mesh)
     m_shadowDirty = true;
 }
 
+void BlackGlass::deferShadowUpdate()
+{
+    m_shadowRefreshPending = true;
+    m_shadowRefreshTime = glfwGetTime() + 0.15;
+}
+
 void BlackGlass::purgeUnusedBrushAssets()
 {
     m_brushPurgePending = false;

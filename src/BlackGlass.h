@@ -7,6 +7,7 @@
 #include "Camera.h"
 #include "MeshData.h"
 #include "Editor/Brush.h"
+#include "Debug/DebugDraw.h"
 #include "RenderSettings.h"
 
 #include <vector>
@@ -214,6 +215,13 @@ private:
     std::unique_ptr<EditorHost> m_editorHost;
     std::unique_ptr<Editor> m_editor;
     bool m_brushPurgePending = false;
+    bool m_shadowRefreshPending = false;
+    double m_shadowRefreshTime = 0.0;
+    static constexpr uint32_t DEBUG_LINE_CAPACITY = 65536;
+    DebugDraw m_debugDraw;
+    AllocatedBuffer M_DEBUGLINEBUFFERS[MAX_FRAMES_IN_FLIGHT] = {};
+    VkPipeline M_DEBUGLINEPIPELINE = VK_NULL_HANDLE;
+    VkPipeline M_DEBUGOVERLAYPIPELINE = VK_NULL_HANDLE;
     RenderSettings m_defaultSettings;
     bool m_quitPrompt = false;
     VkFormat m_uiColorFormat = VK_FORMAT_UNDEFINED;
@@ -403,6 +411,8 @@ private:
     void replaceAssetMesh(ModelAsset& asset, MeshData& mesh);
     void purgeUnusedBrushAssets();
     void applySunDirection();
+    void createDebugDraw();
+    void deferShadowUpdate();
     void initEditor();
     void createTextureSampler();
     void transitionImageLayoutImmediate(VkImage image, VkImageLayout oldLayout,

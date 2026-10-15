@@ -59,6 +59,141 @@ void Editor::addBrush()
     }
 }
 
+void Editor::createBrushFromBounds(const BrushBounds& bounds)
+{
+    LevelBrush brush;
+    brush.name = "Brush " + std::to_string(m_nextBrush++);
+    brush.def = m_newBrush;
+    brush.def.size = bounds.size;
+    brush.position = bounds.center;
+
+    if (!m_host.spawnBrush(brush, true))
+    {
+        m_status = "Could not create the brush";
+    }
+}
+
+void Editor::drawGrid()
+{
+    glm::vec3 focus = m_host.spawnPoint();
+    glm::vec3 center(std::round(focus.x / m_gridSize) * m_gridSize, 0.0f,
+                     std::round(focus.z / m_gridSize) * m_gridSize);
+
+    m_host.debug().grid(center, 40, m_gridSize, 0.002f,
+                        glm::vec4(0.8f, 0.8f, 0.8f, 0.10f),
+                        glm::vec4(1.0f, 0.3f, 0.3f, 0.30f), 5);
+}
+
+void Editor::drawSelection()
+{
+    glm::mat4 transform(1.0f);
+    glm::vec3 localMin(0.0f);
+    glm::vec3 localMax(0.0f);
+    if (!m_host.selectedBounds(transform, localMin, localMax))
+    {
+        return;
+    }
+
+    glm::vec3 pad(0.002f);
+    m_host.debug().obb(transform, localMin - pad, localMax + pad, glm::vec4(1.0f, 0.55f, 0.1f, 1.0f), false);
+    m_host.debug().obb(transform, localMin - pad, localMax + pad, glm::vec4(1.0f, 0.55f, 0.1f, 0.25f), true);
+}
+
+void Editor::update(bool overlayVisible)
+{
+    ViewInfo view;
+    m_host.viewInfo(view);
+
+    glm::vec3 origin(0.0f);
+    glm::vec3 direction(0.0f, -1.0f, 0.0f);
+    bool hasRay = m_host.cursorRay(origin, direction);
+    bool free = m_host.cursorFree();
+
+    SnapSets snaps;
+    if (m_tool.armed() || m_handles.dragging())
+    {
+        m_host.collectSnaps(snaps, m_handles.dragging());
+    }
+
+    std::string label;
+
+    SurfaceHit surface;
+    if (m_tool.armed() && hasRay && free)
+    {
+        m_host.pickSurface(origin, direction, surface);
+    }
+
+    BrushBounds bounds;
+    if (m_tool.update(view, hasRay, origin, direction, free, surface, snaps, m_gridSize,
+                      overlayVisible, m_host.debug(), bounds, label))
+    {
+        createBrushFromBounds(bounds);
+    }
+
+    HandleTarget target;
+    if (!m_tool.armed())
+    {
+        target.valid = m_host.selectedBrushFrame(target.position, target.yawDegrees, target.size);
+    }
+
+    HandleEdit edit;
+    if (m_handles.update(view, target, free, m_gridSize, snaps, overlayVisible, m_host.debug(), edit, label))
+    {
+        m_host.setSelectedBrush(edit.position, edit.size);
+    }
+
+    m_label = label;
+
+    if (overlayVisible)
+    {
+        if (m_showGrid)
+        {
+            drawGrid();
+        }
+        if (m_showSelection)
+        {
+            drawSelection();
+        }
+    }
+}
+
+void Editor::drawOverlayUi()
+{
+    if (m_label.empty())
+    {
+        return;
+    }
+
+    ImVec2 mouse = ImGui::GetIO().MousePos;
+    ImDrawList* list = ImGui::GetForegroundDrawList();
+    ImVec2 position(mouse.x + 18.0f, mouse.y + 18.0f);
+    ImVec2 size = ImGui::CalcTextSize(m_label.c_str());
+    list->AddRectFilled(ImVec2(position.x - 6.0f, position.y - 3.0f),
+                        ImVec2(position.x + size.x + 6.0f, position.y + size.y + 3.0f),
+                        IM_COL32(10, 10, 12, 215), 4.0f);
+    list->AddText(position, IM_COL32(245, 245, 245, 255), m_label.c_str());
+}
+
+bool Editor::onLeftPress()
+{
+    if (m_tool.armed())
+    {
+        return m_tool.onPress();
+    }
+    return m_handles.onPress();
+}
+
+void Editor::onLeftRelease()
+{
+    m_tool.onRelease();
+    m_handles.onRelease();
+}
+
+bool Editor::cancelTool()
+{
+    return m_tool.cancel();
+}
+
 void Editor::saveLevel()
 {
     std::string name = m_levelName;
@@ -127,7 +262,7 @@ void Editor::drawBrushSection()
         ImGui::SetTooltip("New brushes snap to this grid, size fields step by it");
     }
 
-    ImGui::DragFloat3("Size", &m_newBrush.size.x, m_gridSize, m_gridSize, 1000.0f, "%.2f");
+    ImGui::DragFloat3("Size", &m_newBrush.size.x, 0.05f, 0.05f, 1000.0f, "%.2f");
     ImGui::ColorEdit3("Color", &m_newBrush.color.x);
     ImGui::SliderFloat("Roughness", &m_newBrush.roughness, 0.05f, 1.0f, "%.2f");
     ImGui::SliderFloat("Metallic", &m_newBrush.metallic, 0.0f, 1.0f, "%.2f");
@@ -140,6 +275,32 @@ void Editor::drawBrushSection()
     {
         ImGui::SetTooltip("Create a box where the camera is looking at the floor");
     }
+
+    ImGui::SameLine();
+    if (ImGui::Button(m_tool.armed() ? "Stop drawing" : "Draw brushes"))
+    {
+        if (m_tool.armed())
+        {
+            m_tool.disarm();
+        }
+        else
+        {
+            m_host.cancelPlacement();
+            m_tool.arm();
+        }
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Drag a footprint on the floor, release, move up for height, click to confirm");
+    }
+    if (m_tool.armed())
+    {
+        ImGui::TextDisabled("Drag a footprint, release, move the mouse for height, click. Esc to stop.");
+    }
+
+    ImGui::Checkbox("Show grid", &m_showGrid);
+    ImGui::SameLine();
+    ImGui::Checkbox("Show selection outline", &m_showSelection);
 }
 
 void Editor::drawSelectedBrushSection()
@@ -152,7 +313,7 @@ void Editor::drawSelectedBrushSection()
     }
 
     bool changed = false;
-    changed |= ImGui::DragFloat3("Size##selected", &brush->size.x, m_gridSize, m_gridSize, 1000.0f, "%.2f");
+    changed |= ImGui::DragFloat3("Size##selected", &brush->size.x, 0.05f, 0.05f, 1000.0f, "%.2f");
     changed |= ImGui::ColorEdit3("Color##selected", &brush->color.x);
     changed |= ImGui::SliderFloat("Roughness##selected", &brush->roughness, 0.05f, 1.0f, "%.2f");
     changed |= ImGui::SliderFloat("Metallic##selected", &brush->metallic, 0.0f, 1.0f, "%.2f");

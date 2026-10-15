@@ -84,6 +84,7 @@ void BlackGlass::initVulkan()
 
     std::cout << "→ createGraphicsPipeline()\n";
     createGraphicsPipeline();
+    createDebugDraw();
 
     std::cout << "→ createPostResources()\n";
     createPostResources();

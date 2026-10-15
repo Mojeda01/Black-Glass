@@ -376,6 +376,10 @@ void BlackGlass::requestQuit()
         glfwSetWindowShouldClose(m_window, GLFW_TRUE);
         return;
     }
+    if (m_editor && m_editor->cancelTool())
+    {
+        return;
+    }
     if (ImGui::IsAnyItemActive())
     {
         return;
@@ -885,6 +889,11 @@ void BlackGlass::buildUi()
     }
 
     ImGui::End();
+
+    if (m_editor)
+    {
+        m_editor->drawOverlayUi();
+    }
 
     drawQuitPrompt();
 }

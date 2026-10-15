@@ -7,6 +7,7 @@
 #include <vector>
 #include <algorithm>
 #include <utility>
+#include <cstring>
 
 namespace
 {
@@ -679,6 +680,23 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
     renderingInfo.pColorAttachments = &colorAttachment;
     renderingInfo.pDepthAttachment = &depthAttachment;
 
+    const std::vector<DebugVertex>& testedLines = m_debugDraw.tested();
+    const std::vector<DebugVertex>& overlayLines = m_debugDraw.overlay();
+    uint32_t testedCount = static_cast<uint32_t>(std::min<size_t>(testedLines.size(), DEBUG_LINE_CAPACITY)) & ~1u;
+    uint32_t overlayCount = static_cast<uint32_t>(std::min<size_t>(overlayLines.size(), DEBUG_LINE_CAPACITY - testedCount)) & ~1u;
+    AllocatedBuffer& debugBuffer = M_DEBUGLINEBUFFERS[M_CURRENTFRAME];
+    if (debugBuffer.mapped && testedCount + overlayCount > 0)
+    {
+        DebugVertex* destination = static_cast<DebugVertex*>(debugBuffer.mapped);
+        std::memcpy(destination, testedLines.data(), sizeof(DebugVertex) * testedCount);
+        std::memcpy(destination + testedCount, overlayLines.data(), sizeof(DebugVertex) * overlayCount);
+    }
+    else
+    {
+        testedCount = 0;
+        overlayCount = 0;
+    }
+
     writeTimestamp(commandBuffer, 2);
 
     vkCmdBeginRendering(commandBuffer, &renderingInfo);
@@ -711,6 +729,34 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
     }
 
     drawSky();
+
+    if (testedCount + overlayCount > 0)
+    {
+        VkWriteDescriptorSet frameLineWrite{};
+        frameLineWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        frameLineWrite.dstBinding = 0;
+        frameLineWrite.descriptorCount = 1;
+        frameLineWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        frameLineWrite.pBufferInfo = &bufferInfo;
+        M_PUSHDESCRIPTORFN(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, M_PIPELINELAYOUT, 0, 1, &frameLineWrite);
+
+        VkBuffer lineBuffers[] = { debugBuffer.buffer };
+        VkDeviceSize lineOffsets[] = { 0 };
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, lineBuffers, lineOffsets);
+
+        if (testedCount > 0)
+        {
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, M_DEBUGLINEPIPELINE);
+            vkCmdDraw(commandBuffer, testedCount, 1, 0, 0);
+        }
+        if (overlayCount > 0)
+        {
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, M_DEBUGOVERLAYPIPELINE);
+            vkCmdDraw(commandBuffer, overlayCount, 1, testedCount, 0);
+        }
+
+        boundModel = nullptr;
+    }
 
     vkCmdEndRendering(commandBuffer);
 

@@ -1,4 +1,5 @@
 #include "../BlackGlass.h"
+#include "../Editor/Editor.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -192,6 +193,11 @@ void BlackGlass::onLeftPress(bool shiftHeld)
         return;
     }
 
+    if (m_editor && m_editor->onLeftPress())
+    {
+        return;
+    }
+
     if (m_ghost)
     {
         if (!m_ghost->visible)
@@ -239,6 +245,10 @@ void BlackGlass::onLeftPress(bool shiftHeld)
 
 void BlackGlass::onLeftRelease()
 {
+    if (m_editor)
+    {
+        m_editor->onLeftRelease();
+    }
     if (m_dragging)
     {
         m_dragging = false;
