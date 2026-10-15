@@ -77,6 +77,7 @@ void BlackGlass::initVulkan()
 
     std::cout << "→ createSyncObjects()\n";
     createSyncObjects();
+    createTimestampPool();
 
     std::cout << "→ createPipelineLayout()\n";
     createPipelineLayout();

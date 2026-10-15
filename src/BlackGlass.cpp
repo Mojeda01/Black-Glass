@@ -22,6 +22,7 @@ void BlackGlass::drawFrame()
     // wait for the GPU to finish with this frame-in-flight slot's resources
     // before reusing its command buffer.
     vkWaitForFences(M_DEVICE, 1, &M_INFLIGHTFENCES[M_CURRENTFRAME], VK_TRUE, UINT64_MAX);
+    collectGpuTimings(M_CURRENTFRAME);
 
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(
@@ -188,6 +189,12 @@ void BlackGlass::cleanup()
     if (!M_INFLIGHTFENCES.empty())
     {
         std::cout << "  [cleanup] Sync Objects destroyed. \n";
+    }
+
+    if (M_TIMESTAMPPOOL != VK_NULL_HANDLE)
+    {
+        vkDestroyQueryPool(M_DEVICE, M_TIMESTAMPPOOL, nullptr);
+        M_TIMESTAMPPOOL = VK_NULL_HANDLE;
     }
 
     for (VkPipeline pipeline : { M_PREPASSPIPELINE, M_SSAOPIPELINE, M_SSAOBLURPIPELINE, M_SKYPIPELINE, M_TRANSMISSIONPIPELINE, M_BLENDPIPELINE, M_BLOOMDOWNPIPELINE, M_BLOOMUPPIPELINE, M_COMPOSITEPIPELINE })

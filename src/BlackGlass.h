@@ -315,6 +315,22 @@ private:
     bool m_shadowDirty = false;
     bool m_imguiReady = false;
     bool m_showUi = true;
+    static constexpr uint32_t GPU_TIMESTAMPS = 7;
+    static constexpr uint32_t GPU_SEGMENTS = GPU_TIMESTAMPS - 1;
+    static constexpr size_t FRAME_HISTORY = 120;
+    VkQueryPool M_TIMESTAMPPOOL = VK_NULL_HANDLE;
+    float m_timestampPeriod = 1.0f;
+    uint64_t m_timestampMask = 0;
+    bool m_timestampsSupported = false;
+    bool m_gpuTimingsEnabled = false;
+    bool m_timestampRecorded[MAX_FRAMES_IN_FLIGHT] = {};
+    float m_gpuSegmentsMs[GPU_SEGMENTS] = {};
+    std::array<float, FRAME_HISTORY> m_frameTimes{};
+    size_t m_frameTimeOffset = 0;
+    char m_assetSearch[64] = {};
+    float m_fitSize = 10.0f;
+    std::string m_settingsStatus;
+    RenderSettings m_defaultSettings;
     bool m_quitPrompt = false;
     VkFormat m_uiColorFormat = VK_FORMAT_UNDEFINED;
     double m_lastX = 0.0;
@@ -508,6 +524,9 @@ private:
     void createCommandPool();   // done
     void createCommandBuffers(); // done
     void createSyncObjects(); // done 
+    void createTimestampPool();
+    void collectGpuTimings(uint32_t frameSlot);
+    void writeTimestamp(VkCommandBuffer commandBuffer, uint32_t index);
     void recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
     // QUERY HELPERS

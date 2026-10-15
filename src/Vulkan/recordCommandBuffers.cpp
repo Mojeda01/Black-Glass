@@ -89,6 +89,13 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
         throw std::runtime_error("Failed to begin recording command buffer.");
     }
 
+    if (m_timestampsSupported && m_gpuTimingsEnabled)
+    {
+        vkCmdResetQueryPool(commandBuffer, M_TIMESTAMPPOOL, M_CURRENTFRAME * GPU_TIMESTAMPS, GPU_TIMESTAMPS);
+        m_timestampRecorded[M_CURRENTFRAME] = true;
+    }
+    writeTimestamp(commandBuffer, 0);
+
     const bool msaa = M_MSAASAMPLES != VK_SAMPLE_COUNT_1_BIT;
     const bool bloom = m_settings.bloom && !M_BLOOMIMAGES.empty() && m_debugView == 0;
 
@@ -457,6 +464,8 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
                 glm::vec4(0.0f, 0.0f, static_cast<float>(aoExtent.width), static_cast<float>(aoExtent.height)));
     }
 
+    writeTimestamp(commandBuffer, 1);
+
     if (m_reflectionActive)
     {
         const VkExtent2D reflExtent = { std::max(M_SWAPCHAINEXTENT.width / 2, 1u),
@@ -628,6 +637,8 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
     renderingInfo.pColorAttachments = &colorAttachment;
     renderingInfo.pDepthAttachment = &depthAttachment;
 
+    writeTimestamp(commandBuffer, 2);
+
     vkCmdBeginRendering(commandBuffer, &renderingInfo);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, M_GRAPHICSPIPELINE);
@@ -660,6 +671,8 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
     drawSky();
 
     vkCmdEndRendering(commandBuffer);
+
+    writeTimestamp(commandBuffer, 3);
 
     if (hasTransparent)
     {
@@ -821,6 +834,8 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT
     );
 
+    writeTimestamp(commandBuffer, 4);
+
     auto fullscreenPass = [&](VkPipeline pipeline, VkImageView target, VkExtent2D extent,
                               VkAttachmentLoadOp loadOp, VkImageView input0, VkImageView input1,
                               const glm::vec4& params, bool endPass = true)
@@ -940,6 +955,8 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
         }
     }
 
+    writeTimestamp(commandBuffer, 5);
+
     transitionImageLayout(
         commandBuffer, M_SWAPCHAINIMAGES[imageIndex],
         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -966,6 +983,8 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_2_NONE,
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT
     );
+
+    writeTimestamp(commandBuffer, 6);
 
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
     {
