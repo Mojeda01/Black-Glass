@@ -221,6 +221,7 @@ struct UniformBufferObject
     glm::vec4 groundBoxes[8];
     glm::vec4 effectParams;
     glm::vec4 passParams;
+    glm::vec4 projParams;
 };
 
 constexpr VkFormat HDR_FORMAT = VK_FORMAT_R16G16B16A16_SFLOAT;

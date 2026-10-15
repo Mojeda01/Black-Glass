@@ -200,6 +200,7 @@ void BlackGlass::updateUniformBuffer(uint32_t currentImage)
                                  m_reflectionActive ? m_settings.reflectionStrength : 0.0f,
                                  m_settings.floorRoughness);
     ubo.passParams = glm::vec4(0.0f);
+    ubo.projParams = glm::vec4(ubo.proj[2][2], ubo.proj[3][2], ubo.proj[0][0], ubo.proj[1][1]);
 
     std::memcpy(M_UNIFORMBUFFERSMAPPED[currentImage], &ubo, sizeof(ubo));
 

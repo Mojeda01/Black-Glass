@@ -17,7 +17,7 @@ void BlackGlass::createEffectResources()
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
 
     M_AORAW = createImage(
-        width, height, VK_FORMAT_R8_UNORM, VK_IMAGE_TILING_OPTIMAL,
+        std::max((width + 1) / 2, 1u), std::max((height + 1) / 2, 1u), VK_FORMAT_R8_UNORM, VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 

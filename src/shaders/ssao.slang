@@ -13,6 +13,7 @@ struct FrameData {
     float4 groundBoxes[8];
     float4 effectParams;
     float4 passParams;
+    float4 projParams;
 };
 
 struct FxPush {
@@ -46,16 +47,16 @@ FullscreenOutput fullscreenVertex(uint vid : SV_VertexID)
     return output;
 }
 
-float3 worldFromDepth(float2 uv, float depth)
+float linearDepth(float depth)
 {
-    float4 ndc = float4(uv * 2.0 - 1.0, depth, 1.0);
-    float4 w = mul(frame.invViewProj, ndc);
-    return w.xyz / w.w;
+    return frame.projParams.y / (depth + frame.projParams.x);
 }
 
-float viewDepthOf(float3 world)
+float3 viewFromDepth(float2 uv, float depth)
 {
-    return -mul(frame.view, float4(world, 1.0)).z;
+    float L = linearDepth(depth);
+    float2 ndc = uv * 2.0 - 1.0;
+    return float3(ndc.x * L / frame.projParams.z, ndc.y * L / frame.projParams.w, -L);
 }
 
 float interleavedGradient(float2 p)
@@ -66,36 +67,38 @@ float interleavedGradient(float2 p)
 [shader("fragment")]
 float4 ssaoFragment(FullscreenOutput input) : SV_Target
 {
-    float2 texel = 1.0 / frame.debugParams.zw;
-    float2 uv = input.uv;
+    float2 fullSize = frame.debugParams.zw;
+    float2 texel = 1.0 / fullSize;
+    float2 uv = (2.0 * floor(input.pos.xy) + 0.5) / fullSize;
 
     float depth = texA.SampleLevel(uv, 0.0).r;
     if (depth >= 1.0)
         return float4(1.0, 1.0, 1.0, 1.0);
 
-    float3 P = worldFromDepth(uv, depth);
+    float3 P = viewFromDepth(uv, depth);
 
     float2 uvR = uv + float2(texel.x, 0.0);
     float2 uvL = uv - float2(texel.x, 0.0);
     float2 uvU = uv + float2(0.0, texel.y);
     float2 uvD = uv - float2(0.0, texel.y);
-    float3 pR = worldFromDepth(uvR, texA.SampleLevel(uvR, 0.0).r);
-    float3 pL = worldFromDepth(uvL, texA.SampleLevel(uvL, 0.0).r);
-    float3 pU = worldFromDepth(uvU, texA.SampleLevel(uvU, 0.0).r);
-    float3 pD = worldFromDepth(uvD, texA.SampleLevel(uvD, 0.0).r);
+    float3 pR = viewFromDepth(uvR, texA.SampleLevel(uvR, 0.0).r);
+    float3 pL = viewFromDepth(uvL, texA.SampleLevel(uvL, 0.0).r);
+    float3 pU = viewFromDepth(uvU, texA.SampleLevel(uvU, 0.0).r);
+    float3 pD = viewFromDepth(uvD, texA.SampleLevel(uvD, 0.0).r);
 
     float3 dx = length(pR - P) < length(P - pL) ? pR - P : P - pL;
     float3 dy = length(pU - P) < length(P - pD) ? pU - P : P - pD;
     float3 N = normalize(cross(dx, dy));
-    if (dot(N, frame.cameraPos.xyz - P) < 0.0)
+    if (dot(N, -P) < 0.0)
         N = -N;
 
     float3 T = normalize(abs(N.y) < 0.99 ? cross(N, float3(0.0, 1.0, 0.0)) : cross(N, float3(1.0, 0.0, 0.0)));
     float3 B = cross(N, T);
 
     float noise = interleavedGradient(input.pos.xy);
-    float radius = fx.params.x;
-    float pointViewDepth = viewDepthOf(P);
+    float pointL = -P.z;
+    float maxRadius = 0.12 * pointL / (0.5 * abs(frame.projParams.w));
+    float radius = min(fx.params.x, maxRadius);
 
     const int COUNT = 16;
     float occlusion = 0.0;
@@ -111,8 +114,12 @@ float4 ssaoFragment(FullscreenOutput input) : SV_Target
         float len = radius * lerp(0.1, 1.0, s * s);
         float3 S = P + dir * len;
 
-        float4 clip = mul(frame.proj, mul(frame.view, float4(S, 1.0)));
-        float2 suv = clip.xy / clip.w * 0.5 + 0.5;
+        float sampleL = -S.z;
+        if (sampleL <= 1e-4)
+            continue;
+
+        float2 ndc = float2(S.x * frame.projParams.z, S.y * frame.projParams.w) / sampleL;
+        float2 suv = ndc * 0.5 + 0.5;
         if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0)
             continue;
 
@@ -120,12 +127,11 @@ float4 ssaoFragment(FullscreenOutput input) : SV_Target
         if (sd >= 1.0)
             continue;
 
-        float sceneViewDepth = viewDepthOf(worldFromDepth(suv, sd));
-        float sampleViewDepth = viewDepthOf(S);
-        float diff = sampleViewDepth - sceneViewDepth;
+        float sceneL = linearDepth(sd);
+        float diff = sampleL - sceneL;
         if (diff > radius * 0.05)
         {
-            float rangeCheck = saturate(radius / max(abs(pointViewDepth - sceneViewDepth), 1e-5));
+            float rangeCheck = saturate(radius / max(abs(pointL - sceneL), 1e-5));
             occlusion += rangeCheck;
         }
     }
@@ -138,32 +144,49 @@ float4 ssaoFragment(FullscreenOutput input) : SV_Target
 [shader("fragment")]
 float4 ssaoBlurFragment(FullscreenOutput input) : SV_Target
 {
-    float2 texel = 1.0 / frame.debugParams.zw;
     float2 uv = input.uv;
+    float2 aoSize = fx.params.zw;
+    float2 fullSize = frame.debugParams.zw;
 
     float d0 = texB.SampleLevel(uv, 0.0).r;
     if (d0 >= 1.0)
         return float4(1.0, 1.0, 1.0, 1.0);
 
-    float v0 = viewDepthOf(worldFromDepth(uv, d0));
+    float L0 = linearDepth(d0);
+
+    float2 pixelPos = floor(input.pos.xy) + 0.5;
+    float2 baseIndex = floor(pixelPos * 0.5);
 
     float sum = 0.0;
     float weightSum = 0.0;
-    for (int y = -2; y <= 2; y++)
+    for (int y = -1; y <= 1; y++)
     {
-        for (int x = -2; x <= 2; x++)
+        for (int x = -1; x <= 1; x++)
         {
-            float2 o = uv + float2(float(x), float(y)) * texel;
-            float d = texB.SampleLevel(o, 0.0).r;
+            float2 tapIndex = baseIndex + float2(float(x), float(y));
+            if (tapIndex.x < 0.0 || tapIndex.y < 0.0 || tapIndex.x >= aoSize.x || tapIndex.y >= aoSize.y)
+                continue;
+
+            float2 samplePos = tapIndex * 2.0 + 0.5;
+            float d = texB.SampleLevel(samplePos / fullSize, 0.0).r;
             if (d >= 1.0)
                 continue;
-            float v = viewDepthOf(worldFromDepth(o, d));
-            float w = saturate(1.0 - abs(v - v0) / (0.05 * v0 + 1e-4));
-            sum += texA.SampleLevel(o, 0.0).r * w;
+
+            float L = linearDepth(d);
+            float depthWeight = saturate(1.0 - abs(L - L0) / (0.05 * L0 + 1e-4));
+            float spatialWeight = saturate(1.0 - length(pixelPos - samplePos) / 4.0);
+            float w = depthWeight * spatialWeight;
+            sum += texA.SampleLevel((tapIndex + 0.5) / aoSize, 0.0).r * w;
             weightSum += w;
         }
     }
 
-    float ao = sum / max(weightSum, 1e-4);
+    if (weightSum < 1e-3)
+    {
+        float ao = texA.SampleLevel((baseIndex + 0.5) / aoSize, 0.0).r;
+        return float4(ao, ao, ao, 1.0);
+    }
+
+    float ao = sum / weightSum;
     return float4(ao, ao, ao, 1.0);
 }

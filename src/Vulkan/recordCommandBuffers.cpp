@@ -381,7 +381,7 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
             VK_IMAGE_ASPECT_DEPTH_BIT
         );
 
-        auto fxPass = [&](VkPipeline pipeline, AllocatedImage& target, VkImageView inputA,
+        auto fxPass = [&](VkPipeline pipeline, AllocatedImage& target, VkExtent2D extent, VkImageView inputA,
                           VkImageView inputB, const glm::vec4& params)
         {
             transitionImageLayout(
@@ -400,15 +400,22 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
 
             VkRenderingInfo passInfo{};
             passInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-            passInfo.renderArea.extent = M_SWAPCHAINEXTENT;
+            passInfo.renderArea.extent = extent;
             passInfo.layerCount = 1;
             passInfo.colorAttachmentCount = 1;
             passInfo.pColorAttachments = &attachment;
 
+            VkViewport passViewport{};
+            passViewport.width = static_cast<float>(extent.width);
+            passViewport.height = static_cast<float>(extent.height);
+            passViewport.maxDepth = 1.0f;
+            VkRect2D passScissor{};
+            passScissor.extent = extent;
+
             vkCmdBeginRendering(commandBuffer, &passInfo);
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-            vkCmdSetViewport(commandBuffer, 0, 1, &fullViewport);
-            vkCmdSetScissor(commandBuffer, 0, 1, &fullScissor);
+            vkCmdSetViewport(commandBuffer, 0, 1, &passViewport);
+            vkCmdSetScissor(commandBuffer, 0, 1, &passScissor);
 
             VkDescriptorImageInfo infos[2]{};
             infos[0] = { M_POINTSAMPLER, inputA, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
@@ -442,9 +449,12 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
             );
         };
 
-        fxPass(M_SSAOPIPELINE, M_AORAW, M_PREPASSDEPTH.view, M_PREPASSDEPTH.view,
+        VkExtent2D aoExtent{ std::max((M_SWAPCHAINEXTENT.width + 1) / 2, 1u),
+                             std::max((M_SWAPCHAINEXTENT.height + 1) / 2, 1u) };
+        fxPass(M_SSAOPIPELINE, M_AORAW, aoExtent, M_PREPASSDEPTH.view, M_PREPASSDEPTH.view,
                 glm::vec4(m_ssaoWorldRadius, m_settings.ssaoIntensity, 0.0f, 0.0f));
-        fxPass(M_SSAOBLURPIPELINE, M_AOBLUR, M_AORAW.view, M_PREPASSDEPTH.view, glm::vec4(0.0f));
+        fxPass(M_SSAOBLURPIPELINE, M_AOBLUR, M_SWAPCHAINEXTENT, M_AORAW.view, M_PREPASSDEPTH.view,
+                glm::vec4(0.0f, 0.0f, static_cast<float>(aoExtent.width), static_cast<float>(aoExtent.height)));
     }
 
     if (m_reflectionActive)

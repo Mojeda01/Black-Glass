@@ -10,6 +10,10 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <thread>
+#include <atomic>
+#include <algorithm>
+#include "../stb_image.h"
 
 #define TINYGLTF_NO_STB_IMAGE_IMPLEMENTATION
 #define TINYGLTF_NO_STB_IMAGE_WRITE_IMPLEMENTATION
@@ -357,6 +361,82 @@ namespace
         }
     }
 
+    bool deferImageDecode(tinygltf::Image* image, const int, std::string*, std::string*,
+                          int, int, const unsigned char* bytes, int size, void*)
+    {
+        image->image.assign(bytes, bytes + size);
+        image->width = 0;
+        image->height = 0;
+        return true;
+    }
+
+    ImageData makePlaceholder()
+    {
+        ImageData data;
+        data.width = 64;
+        data.height = 64;
+        data.pixels.resize(64 * 64 * 4);
+        for (int y = 0; y < 64; y++)
+        {
+            for (int x = 0; x < 64; x++)
+            {
+                bool odd = ((x / 8) + (y / 8)) % 2 != 0;
+                unsigned char* p = &data.pixels[(y * 64 + x) * 4];
+                p[0] = odd ? 255 : 20;
+                p[1] = 20;
+                p[2] = odd ? 255 : 20;
+                p[3] = 255;
+            }
+        }
+        return data;
+    }
+
+    std::vector<ImageData> decodeImages(const tinygltf::Model& model, const std::string& baseName)
+    {
+        std::vector<ImageData> out(model.images.size());
+        std::vector<std::string> failures(model.images.size());
+        std::atomic<size_t> next{ 0 };
+
+        auto worker = [&]()
+        {
+            for (size_t i = next.fetch_add(1); i < model.images.size(); i = next.fetch_add(1))
+            {
+                const std::vector<unsigned char>& bytes = model.images[i].image;
+                int w = 0, h = 0, n = 0;
+                unsigned char* pixels = bytes.empty() ? nullptr
+                    : stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &w, &h, &n, 4);
+                if (!pixels)
+                {
+                    const char* reason = stbi_failure_reason();
+                    failures[i] = reason ? reason : "no image data";
+                    out[i] = makePlaceholder();
+                    continue;
+                }
+                out[i].width = w;
+                out[i].height = h;
+                out[i].pixels.assign(pixels, pixels + static_cast<size_t>(w) * h * 4);
+                stbi_image_free(pixels);
+            }
+        };
+
+        unsigned int threadCount = std::max(1u, std::min<unsigned int>(
+            std::thread::hardware_concurrency(), static_cast<unsigned int>(model.images.size())));
+        std::vector<std::thread> threads;
+        for (unsigned int t = 1; t < threadCount; t++) threads.emplace_back(worker);
+        worker();
+        for (std::thread& t : threads) t.join();
+
+        for (size_t i = 0; i < failures.size(); i++)
+        {
+            if (failures[i].empty()) continue;
+            const tinygltf::Image& img = model.images[i];
+            std::string label = !img.uri.empty() ? img.uri : (!img.name.empty() ? img.name : "image " + std::to_string(i));
+            std::cout << "  [loadGltf] WARN: " << baseName << ": could not decode '" << label
+                      << "' (" << failures[i] << "), using placeholder.\n";
+        }
+        return out;
+    }
+
     glm::vec4 toVec4(const std::vector<double>& v, const glm::vec4& fallback)
     {
         if (v.size() == 4) return glm::vec4(v[0], v[1], v[2], v[3]);
@@ -369,6 +449,7 @@ MeshData BlackGlass::loadGltf(const std::string& path)
 {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
+    loader.SetImageLoader(deferImageDecode, nullptr);
     std::string err, warn;
 
     std::string extension = path.size() >= 5 ? path.substr(path.size() - 5) : std::string();
@@ -387,23 +468,7 @@ MeshData BlackGlass::loadGltf(const std::string& path)
 
     MeshData mesh;
 
-    mesh.images.reserve(model.images.size());
-    for (const tinygltf::Image& img : model.images)
-    {
-        ImageData data;
-        if (img.component == 4 && img.bits == 8)
-        {
-            data.pixels = img.image;
-            data.width = img.width;
-            data.height = img.height;
-        }
-        else
-        {
-            std::cout << "  [loadGltf] WARN: image has " << img.component
-                        << " components at " << img.bits << " bits, expected 4 at 8.\n";
-        }
-        mesh.images.push_back(std::move(data));
-    }
+    mesh.images = decodeImages(model, path);
 
     for (const tinygltf::Sampler& s : model.samplers)
     {

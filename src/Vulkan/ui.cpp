@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <functional>
 #include <stdexcept>
 
 #include "../imgui/imgui.h"
@@ -98,22 +99,65 @@ void BlackGlass::scanAssets()
     namespace fs = std::filesystem;
     m_assetFiles.clear();
 
-    std::error_code error;
-    fs::path root(BLACK_GLASS_ASSET_DIR);
-    for (fs::recursive_directory_iterator it(root, error), end; !error && it != end; it.increment(error))
+    auto isModelFile = [](const fs::path& p)
     {
-        if (!it->is_regular_file())
-        {
-            continue;
-        }
-        std::string extension = it->path().extension().string();
+        std::string extension = p.extension().string();
         std::transform(extension.begin(), extension.end(), extension.begin(),
                         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        if (extension == ".glb" || extension == ".gltf")
+        return extension == ".glb" || extension == ".gltf";
+    };
+
+    std::error_code error;
+    fs::path root(BLACK_GLASS_ASSET_DIR);
+
+    std::function<void(const fs::path&)> scanDirectory = [&](const fs::path& dir)
+    {
+        std::vector<fs::path> models;
+        std::vector<fs::path> subdirs;
+        std::error_code listError;
+        for (fs::directory_iterator it(dir, listError), end; !listError && it != end; it.increment(listError))
         {
-            m_assetFiles.push_back(fs::relative(it->path(), root).generic_string());
+            if (it->is_directory())
+            {
+                subdirs.push_back(it->path());
+            }
+            else if (it->is_regular_file() && isModelFile(it->path()))
+            {
+                models.push_back(it->path());
+            }
         }
-    }
+
+        if (dir != root && models.size() > 1)
+        {
+            std::vector<fs::path> named;
+            for (const fs::path& m : models)
+            {
+                if (m.stem() == dir.filename())
+                {
+                    named.push_back(m);
+                }
+            }
+            if (!named.empty())
+            {
+                models = named;
+            }
+        }
+
+        for (const fs::path& m : models)
+        {
+            m_assetFiles.push_back(fs::relative(m, root).generic_string());
+        }
+
+        if (dir == root || models.empty())
+        {
+            for (const fs::path& sub : subdirs)
+            {
+                scanDirectory(sub);
+            }
+        }
+    };
+
+    scanDirectory(root);
     std::sort(m_assetFiles.begin(), m_assetFiles.end());
 }
 
