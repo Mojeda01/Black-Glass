@@ -214,6 +214,9 @@ public:
     bool handleEditorKey(int key, int mods, bool repeat);
     void noteEditorInput();
     void toggleWalkMode(bool fromCamera = false);
+    void startSplash();
+    void skipSplash();
+    bool splashActive() const { return m_splashActive; }
     void exitWalkMode();
     bool walkMode() const { return m_walkMode; }
     Camera& camera() { return m_camera; }
@@ -372,6 +375,18 @@ private:
     glm::vec3 m_dragPlaneNormal{ 0.0f, 0.0f, 1.0f };
     float m_verticalSnap = 0.5f;
     bool m_flyHeld = false;
+    bool m_splashActive = false;
+    bool m_splashSkip = false;
+    double m_splashStart = -1.0;
+    int m_splashColumns = 1;
+    glm::ivec2 m_splashFrameSize{ 1, 1 };
+    glm::ivec2 m_splashAtlasSize{ 1, 1 };
+    std::vector<int> m_splashEnds;
+    AllocatedImage m_splashImage{};
+    VkSampler m_splashSampler = VK_NULL_HANDLE;
+    VkDescriptorSet m_splashSet = VK_NULL_HANDLE;
+    void drawSplash();
+    void releaseSplash();
     bool m_walkMode = false;
     bool m_walkGrounded = false;
     bool m_walkUiWasVisible = true;

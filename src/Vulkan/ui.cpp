@@ -329,6 +329,8 @@ void BlackGlass::shutdownImGui()
         return;
     }
 
+    releaseSplash();
+
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
@@ -362,7 +364,7 @@ void BlackGlass::toggleUi()
 
 void BlackGlass::beginUiFrame()
 {
-    if (!m_imguiReady || (!m_showUi && !m_quitPrompt))
+    if (!m_imguiReady || (!m_showUi && !m_quitPrompt && !m_splashActive))
     {
         return;
     }
@@ -945,6 +947,12 @@ void BlackGlass::drawSettingsWindow()
 
 void BlackGlass::buildUi()
 {
+    if (m_splashActive)
+    {
+        drawSplash();
+        return;
+    }
+
     if (!m_showUi)
     {
         drawQuitPrompt();

@@ -57,6 +57,7 @@ add_library(black_glass_engine STATIC
     Vulkan/scene.cpp
     Vulkan/placement.cpp
     Vulkan/walk.cpp
+    Vulkan/splash.cpp
     Vulkan/createShadow.cpp
     Vulkan/ui.cpp
     Vulkan/vmaImpl.cpp
@@ -105,6 +106,7 @@ endif()
 target_compile_definitions(black_glass_engine PRIVATE
     BLACK_GLASS_SHADER_DIR="${V3_SHADER_BIN_DIR}"
     BLACK_GLASS_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets"
+    BLACK_GLASS_LOADING_DIR="${CMAKE_CURRENT_SOURCE_DIR}/loading"
 )
 
 target_compile_definitions(black_glass_engine PUBLIC

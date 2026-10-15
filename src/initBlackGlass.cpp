@@ -84,6 +84,14 @@ void initBlackGlass() {
                     {
                         return;
                     }
+                    if (r->splashActive())
+                    {
+                        if (action == GLFW_PRESS)
+                        {
+                            r->skipSplash();
+                        }
+                        return;
+                    }
                     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
                     {
                         r->onLeftPress((mods & GLFW_MOD_SHIFT) != 0, (mods & GLFW_MOD_ALT) != 0);
@@ -117,6 +125,14 @@ void initBlackGlass() {
          glfwSetKeyCallback(window.get(),
                  [](GLFWwindow* w, int key, int, int action, int mods) {
                     auto* r = static_cast<BlackGlass*>(glfwGetWindowUserPointer(w));
+                    if (r && r->splashActive())
+                    {
+                        if (action == GLFW_PRESS)
+                        {
+                            r->skipSplash();
+                        }
+                        return;
+                    }
                     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
                     {
                         if (!r)
@@ -179,6 +195,7 @@ void initBlackGlass() {
                  });
 
         renderer.initImGui();
+        renderer.startSplash();
 
         while (!window.shouldClose()) {
             window.pollEvents();
