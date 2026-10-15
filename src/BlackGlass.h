@@ -83,8 +83,23 @@ struct Model
     glm::mat4 transform{ 1.0f };
     std::optional<BrushDef> brush;
     std::optional<LightDef> light;
+    bool spawn = false;
+    bool solid = true;
     glm::vec3 worldMin{ 0.0f };
     glm::vec3 worldMax{ 0.0f };
+};
+
+struct CollisionPiece
+{
+    glm::vec2 center{ 0.0f };
+    float cosYaw = 1.0f;
+    float sinYaw = 0.0f;
+    glm::vec2 minLocal{ 0.0f };
+    glm::vec2 maxLocal{ 0.0f };
+    float baseY = 0.0f;
+    float topOffset = 0.0f;
+    float slope = 0.0f;
+    bool steep = false;
 };
 
 constexpr uint32_t MAX_POINT_LIGHTS = 16;
@@ -198,6 +213,9 @@ public:
     void drawSettingsWindow();
     bool handleEditorKey(int key, int mods, bool repeat);
     void noteEditorInput();
+    void toggleWalkMode(bool fromCamera = false);
+    void exitWalkMode();
+    bool walkMode() const { return m_walkMode; }
     Camera& camera() { return m_camera; }
 private:
     GLFWwindow* m_window = nullptr;
@@ -354,6 +372,18 @@ private:
     glm::vec3 m_dragPlaneNormal{ 0.0f, 0.0f, 1.0f };
     float m_verticalSnap = 0.5f;
     bool m_flyHeld = false;
+    bool m_walkMode = false;
+    bool m_walkGrounded = false;
+    bool m_walkUiWasVisible = true;
+    glm::vec3 m_walkFeet{ 0.0f };
+    glm::vec3 m_walkStart{ 0.0f };
+    glm::vec3 m_walkVelocity{ 0.0f };
+    glm::vec3 m_savedCameraPosition{ 0.0f };
+    float m_savedCameraYaw = -90.0f;
+    float m_savedCameraPitch = 0.0f;
+    std::vector<CollisionPiece> m_collision;
+    void buildCollision();
+    void updateWalk(float deltaTime);
     std::string m_loadError;
     std::vector<std::string> m_assetFiles;
     

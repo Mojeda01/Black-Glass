@@ -79,6 +79,10 @@ bool saveLevelFile(const std::string& path, const LevelData& level, std::string&
         {
             entry["locked"] = true;
         }
+        if (!model.solid)
+        {
+            entry["solid"] = false;
+        }
         models.push_back(entry);
     }
     root["models"] = models;
@@ -104,6 +108,25 @@ bool saveLevelFile(const std::string& path, const LevelData& level, std::string&
         lights.push_back(entry);
     }
     root["lights"] = lights;
+
+    Json spawns = Json::array();
+    for (const LevelSpawn& spawn : level.spawns)
+    {
+        Json entry;
+        entry["name"] = spawn.name;
+        entry["position"] = toJson(spawn.position);
+        entry["yaw"] = spawn.yawDegrees;
+        if (spawn.hidden)
+        {
+            entry["hidden"] = true;
+        }
+        if (spawn.locked)
+        {
+            entry["locked"] = true;
+        }
+        spawns.push_back(entry);
+    }
+    root["spawns"] = spawns;
 
     if (level.hasSettings)
     {
@@ -217,6 +240,7 @@ bool loadLevelFile(const std::string& path, LevelData& level, std::string& error
                 model.scale = entry.value("scale", 1.0f);
                 model.hidden = entry.value("hidden", false);
                 model.locked = entry.value("locked", false);
+                model.solid = entry.value("solid", true);
                 if (!model.asset.empty())
                 {
                     loaded.models.push_back(model);
@@ -238,6 +262,20 @@ bool loadLevelFile(const std::string& path, LevelData& level, std::string& error
                 light.hidden = entry.value("hidden", false);
                 light.locked = entry.value("locked", false);
                 loaded.lights.push_back(light);
+            }
+        }
+
+        if (root.contains("spawns"))
+        {
+            for (const Json& entry : root["spawns"])
+            {
+                LevelSpawn spawn;
+                spawn.name = entry.value("name", std::string("Spawn"));
+                spawn.position = toVec3(entry.value("position", Json()), glm::vec3(0.0f));
+                spawn.yawDegrees = entry.value("yaw", 0.0f);
+                spawn.hidden = entry.value("hidden", false);
+                spawn.locked = entry.value("locked", false);
+                loaded.spawns.push_back(spawn);
             }
         }
 

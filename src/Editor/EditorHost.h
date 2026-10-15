@@ -44,6 +44,9 @@ public:
     virtual bool spawnBrush(const LevelBrush& brush, bool select) = 0;
     virtual bool spawnModel(const LevelModel& model) = 0;
     virtual bool spawnLight(const LevelLight& light, bool select) = 0;
+    virtual bool spawnSpawn(const LevelSpawn& spawn, bool select) = 0;
+    virtual void setPrimarySolid(bool solid) = 0;
+    virtual void drawSpawnMarkers() = 0;
     virtual LightDef* selectedLight() = 0;
     virtual void setLightMarkersVisible(bool visible) = 0;
     virtual std::vector<std::string> textureNames() = 0;
@@ -54,4 +57,5 @@ public:
     virtual void snapSelectedToGrid(float grid) = 0;
     virtual void setVerticalSnap(float grid) = 0;
     virtual void rotateSelected(float degrees) = 0;
+    virtual bool rotationFrame(glm::vec3& center, float& radius) const = 0;
 };

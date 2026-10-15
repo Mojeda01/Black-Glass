@@ -148,6 +148,15 @@ void initBlackGlass() {
                     {
                         return;
                     }
+                    if (r && action == GLFW_PRESS && key == GLFW_KEY_P && !(mods & (GLFW_MOD_SUPER | GLFW_MOD_CONTROL)))
+                    {
+                        r->toggleWalkMode((mods & GLFW_MOD_SHIFT) != 0);
+                        return;
+                    }
+                    if (r && r->walkMode())
+                    {
+                        return;
+                    }
                     if (r && (action == GLFW_PRESS || action == GLFW_REPEAT) &&
                         r->handleEditorKey(key, mods, action == GLFW_REPEAT))
                     {

@@ -347,6 +347,11 @@ bool BlackGlass::uiWantsKeyboard() const
 
 void BlackGlass::toggleMouseCapture()
 {
+    if (m_walkMode)
+    {
+        exitWalkMode();
+        return;
+    }
     setMouseCaptured(!m_mouseCaptured);
 }
 
@@ -371,6 +376,11 @@ void BlackGlass::beginUiFrame()
 
 void BlackGlass::requestQuit()
 {
+    if (m_walkMode)
+    {
+        exitWalkMode();
+        return;
+    }
     if (!m_imguiReady)
     {
         glfwSetWindowShouldClose(m_window, GLFW_TRUE);
@@ -532,6 +542,14 @@ void BlackGlass::drawMainMenuBar()
             m_editor->drawViewMenu();
         }
         ImGui::Separator();
+        if (ImGui::MenuItem("Walk mode", "P"))
+        {
+            toggleWalkMode();
+        }
+        if (ImGui::MenuItem("Walk from camera", "Shift+P"))
+        {
+            toggleWalkMode(true);
+        }
         ImGui::MenuItem("Model library", nullptr, &m_showLibrary);
         ImGui::MenuItem("Settings", nullptr, &m_showSettings);
         ImGui::Separator();

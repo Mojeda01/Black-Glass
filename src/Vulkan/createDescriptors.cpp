@@ -153,7 +153,14 @@ void BlackGlass::updateUniformBuffer(uint32_t currentImage)
     m_deltaTime = std::min(time - m_lastFrameTime, 0.1f);
     m_lastFrameTime = time;
 
-    if (m_mouseCaptured && !m_quitPrompt && !(m_imguiReady && ImGui::GetIO().WantTextInput))
+    if (m_walkMode)
+    {
+        if (m_mouseCaptured && !m_quitPrompt)
+        {
+            updateWalk(m_deltaTime);
+        }
+    }
+    else if (m_mouseCaptured && !m_quitPrompt && !(m_imguiReady && ImGui::GetIO().WantTextInput))
     {
         m_camera.processKeyboard(m_window, m_deltaTime);
     }

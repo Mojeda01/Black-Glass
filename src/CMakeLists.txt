@@ -56,6 +56,7 @@ add_library(black_glass_engine STATIC
     Vulkan/createEffects.cpp
     Vulkan/scene.cpp
     Vulkan/placement.cpp
+    Vulkan/walk.cpp
     Vulkan/createShadow.cpp
     Vulkan/ui.cpp
     Vulkan/vmaImpl.cpp
@@ -71,6 +72,7 @@ add_library(black_glass_engine STATIC
     Debug/DebugDraw.cpp
     Editor/BrushTool.cpp
     Editor/BrushHandles.cpp
+    Editor/RotationGizmo.cpp
     Editor/BrushMesh.cpp
     Editor/ProceduralTextures.cpp
     Editor/LevelIO.cpp

@@ -141,7 +141,7 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
     std::vector<const Model*> drawModels;
     for (const auto& model : M_MODELS)
     {
-        if (model->visible)
+        if (model->visible && !(m_walkMode && (model->light || model->spawn)))
         {
             drawModels.push_back(model.get());
         }
@@ -317,6 +317,15 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
         if (model.ghost)
         {
             highlight = glm::vec4(0.25f, 0.85f, 1.0f, 0.18f);
+        }
+        else if (model.spawn)
+        {
+            glm::vec3 glow(0.2f, 1.2f, 0.35f);
+            if (isSelected(&model))
+            {
+                glow += glm::vec3(0.4f, 0.24f, 0.06f);
+            }
+            highlight = glm::vec4(glow, 1.0f);
         }
         else if (model.light)
         {

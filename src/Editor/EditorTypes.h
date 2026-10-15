@@ -11,7 +11,8 @@ enum class ItemKind
     Ramp,
     Stairs,
     Model,
-    Light
+    Light,
+    Spawn
 };
 
 struct ItemInfo
@@ -21,6 +22,7 @@ struct ItemInfo
     ItemKind kind = ItemKind::Box;
     bool visible = true;
     bool locked = false;
+    bool solid = true;
     bool selected = false;
     glm::vec3 position{ 0.0f };
     float yawDegrees = 0.0f;

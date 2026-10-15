@@ -165,7 +165,7 @@ void BlackGlass::refreshScene()
     for (auto& model : M_MODELS)
     {
         updateModelTransform(*model);
-        if (!model->visible || model->ghost || model->light)
+        if (!model->visible || model->ghost || model->light || model->spawn)
         {
             continue;
         }

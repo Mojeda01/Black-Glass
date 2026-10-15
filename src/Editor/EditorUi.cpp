@@ -55,6 +55,7 @@ namespace
             case ItemKind::Stairs: return "STAIRS";
             case ItemKind::Model: return "MODEL";
             case ItemKind::Light: return "LIGHT";
+            case ItemKind::Spawn: return "SPAWN";
         }
         return "";
     }
@@ -166,6 +167,10 @@ void Editor::drawAddMenu()
     if (ImGui::MenuItem("Light", "L"))
     {
         addLight();
+    }
+    if (ImGui::MenuItem("Player spawn"))
+    {
+        addSpawn();
     }
 }
 
@@ -285,19 +290,28 @@ void Editor::drawToolsPanel()
     }
     hint("Place a point light 2.5 m above where the camera is looking");
 
+    if (ImGui::Button("Add player spawn", ImVec2(-1.0f, 0.0f)))
+    {
+        addSpawn();
+    }
+    hint("Where walk mode (P) starts. Rotate it to set the facing direction");
+
     if (m_tool.armed())
     {
         wrappedHint("Drag a footprint, release, move the mouse for height, then click. Esc stops drawing.");
     }
     else
     {
-        wrappedHint("Click to select, Shift-click to add, drag to move, scroll to rotate.");
+        wrappedHint("Click to select, Shift-click to add, drag to move, Alt-drag to lift, drag the ring to rotate.");
     }
 
     ImGui::SeparatorText("Grid");
     ImGui::SetNextItemWidth(120.0f);
     ImGui::DragFloat("Size", &m_gridSize, 0.05f, 0.05f, 10.0f, "%.2f");
     hint("New brushes and moves snap to this grid");
+    ImGui::SetNextItemWidth(120.0f);
+    ImGui::DragFloat("Rotate snap", &m_rotateSnap, 1.0f, 1.0f, 90.0f, "%.0f deg");
+    hint("The ring rotates in steps of this size. Hold Shift for free rotation");
     ImGui::Checkbox("Show grid", &m_showGrid);
     ImGui::SameLine();
     ImGui::Checkbox("Outline", &m_showSelection);
@@ -495,6 +509,7 @@ void Editor::drawInspectorPanel()
                 case ItemKind::Stairs: stairs++; break;
                 case ItemKind::Model: models++; break;
                 case ItemKind::Light: lights++; break;
+                case ItemKind::Spawn: break;
             }
         }
 
@@ -619,6 +634,11 @@ void Editor::drawInspectorPanel()
         }
         ImGui::TextDisabled("Position is the base of the marker");
     }
+    else if (info.kind == ItemKind::Spawn)
+    {
+        ImGui::SeparatorText("Player spawn");
+        wrappedHint("Walk mode (P) starts here, facing the green arrow. Position is the player's feet.");
+    }
     else
     {
         drawModelProperties(info);
@@ -633,6 +653,12 @@ void Editor::drawInspectorPanel()
 void Editor::drawModelProperties(const ItemInfo& info)
 {
     ImGui::SeparatorText("Model");
+    bool solid = info.solid;
+    if (ImGui::Checkbox("Solid in walk mode", &solid))
+    {
+        m_host.setPrimarySolid(solid);
+    }
+    hint("Solid models block the player as a box around them");
     ImGui::Text("Size  %.2f x %.2f x %.2f", info.nativeSize.x, info.nativeSize.y, info.nativeSize.z);
 
     float longest = std::max(info.nativeSize.x, std::max(info.nativeSize.y, info.nativeSize.z));

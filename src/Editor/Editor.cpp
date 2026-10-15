@@ -38,6 +38,22 @@ void Editor::addLight()
     }
 }
 
+void Editor::addSpawn()
+{
+    glm::vec3 point = m_host.spawnPoint();
+
+    LevelSpawn spawn;
+    spawn.name = "Spawn " + std::to_string(m_nextSpawn++);
+    spawn.position = glm::vec3(std::round(point.x / m_gridSize) * m_gridSize, 0.0f,
+                               std::round(point.z / m_gridSize) * m_gridSize);
+
+    m_host.clearSelection();
+    if (!m_host.spawnSpawn(spawn, true))
+    {
+        m_status = "Could not create the spawn point";
+    }
+}
+
 std::string Editor::levelPath(const std::string& name) const
 {
     return m_host.assetRoot() + "/levels/" + name + ".json";
@@ -278,6 +294,20 @@ void Editor::update(bool overlayVisible)
         m_host.setSelectedBrush(edit.position, edit.size);
     }
 
+    RotationTarget ring;
+    bool handlesBusy = m_handles.hovering() || m_handles.dragging();
+    if (!m_tool.armed() && !handlesBusy)
+    {
+        ring.valid = m_host.rotationFrame(ring.center, ring.radius);
+    }
+    float yawStep = 0.0f;
+    bool shiftHeld = ImGui::GetIO().KeyShift;
+    if (m_gizmo.update(view, ring, hasRay, origin, direction, free && !handlesBusy,
+                       shiftHeld ? 0.0f : m_rotateSnap, overlayVisible, m_host.debug(), yawStep, label))
+    {
+        m_host.rotateSelected(yawStep);
+    }
+
     m_label = label;
 
     if (overlayVisible)
@@ -290,6 +320,7 @@ void Editor::update(bool overlayVisible)
         {
             drawSelection();
         }
+        m_host.drawSpawnMarkers();
     }
 
     trackHistory(overlayVisible);
@@ -314,7 +345,7 @@ void Editor::trackHistory(bool overlayVisible)
 
     ImGuiIO& io = ImGui::GetIO();
     bool busy = io.MouseDown[0] || io.MouseDown[1] || io.MouseDown[2] ||
-                (overlayVisible && ImGui::IsAnyItemActive()) || m_handles.dragging();
+                (overlayVisible && ImGui::IsAnyItemActive()) || m_handles.dragging() || m_gizmo.dragging();
     if (busy)
     {
         m_historyDirty = true;
@@ -349,6 +380,10 @@ void Editor::restoreState(const LevelData& state)
     for (const LevelLight& light : state.lights)
     {
         m_host.spawnLight(light, light.selected);
+    }
+    for (const LevelSpawn& spawn : state.spawns)
+    {
+        m_host.spawnSpawn(spawn, spawn.selected);
     }
     m_host.applyEnvironment(state);
 
@@ -473,13 +508,18 @@ bool Editor::onLeftPress()
     {
         return m_tool.onPress();
     }
-    return m_handles.onPress();
+    if (m_handles.onPress())
+    {
+        return true;
+    }
+    return m_gizmo.onPress();
 }
 
 void Editor::onLeftRelease()
 {
     m_tool.onRelease();
     m_handles.onRelease();
+    m_gizmo.onRelease();
 }
 
 bool Editor::cancelTool()
@@ -550,11 +590,19 @@ bool Editor::applyLevel(const std::string& path, const std::string& name, bool d
             failed++;
         }
     }
+    for (const LevelSpawn& spawn : level.spawns)
+    {
+        if (!m_host.spawnSpawn(spawn, false))
+        {
+            failed++;
+        }
+    }
 
     m_host.applyEnvironment(level);
 
     m_nextBrush = static_cast<int>(level.brushes.size()) + 1;
     m_nextLight = static_cast<int>(level.lights.size()) + 1;
+    m_nextSpawn = static_cast<int>(level.spawns.size()) + 1;
     std::snprintf(m_levelName, sizeof(m_levelName), "%s", name.c_str());
     flushHistory();
     m_dirty = false;
@@ -583,6 +631,7 @@ void Editor::newLevel()
     m_host.clearLevel();
     m_nextBrush = 1;
     m_nextLight = 1;
+    m_nextSpawn = 1;
     flushHistory();
     m_dirty = false;
     m_autosaveCurrent = true;

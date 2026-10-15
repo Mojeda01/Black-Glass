@@ -4,6 +4,7 @@
 #include "BrushTool.h"
 #include "EditorHost.h"
 #include "History.h"
+#include "RotationGizmo.h"
 
 #include <chrono>
 #include <string>
@@ -65,6 +66,7 @@ private:
 
     void addBrush(BrushShape shape);
     void addLight();
+    void addSpawn();
     void newLevel();
     void refreshTextureList();
     void toggleDrawTool();
@@ -99,6 +101,8 @@ private:
     float m_gridSize = 0.5f;
     BrushTool m_tool;
     BrushHandles m_handles;
+    RotationGizmo m_gizmo;
+    float m_rotateSnap = 15.0f;
     std::string m_label;
     bool m_showGrid = true;
     bool m_showSelection = true;
@@ -108,6 +112,7 @@ private:
     bool m_showInspector = true;
     int m_nextBrush = 1;
     int m_nextLight = 1;
+    int m_nextSpawn = 1;
     std::vector<std::string> m_textureNames;
     char m_levelName[64] = "level";
     std::vector<std::string> m_levelFiles;

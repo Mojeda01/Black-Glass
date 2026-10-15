@@ -29,6 +29,17 @@ struct LevelModel
     bool selected = false;
     bool hidden = false;
     bool locked = false;
+    bool solid = true;
+};
+
+struct LevelSpawn
+{
+    std::string name;
+    glm::vec3 position{ 0.0f };
+    float yawDegrees = 0.0f;
+    bool selected = false;
+    bool hidden = false;
+    bool locked = false;
 };
 
 struct LevelLight
@@ -53,6 +64,7 @@ struct LevelData
     std::vector<LevelBrush> brushes;
     std::vector<LevelModel> models;
     std::vector<LevelLight> lights;
+    std::vector<LevelSpawn> spawns;
     bool hasSettings = false;
     RenderSettings settings;
     bool hasCamera = false;
@@ -62,7 +74,7 @@ struct LevelData
 inline bool sameContent(const LevelData& a, const LevelData& b)
 {
     if (a.brushes.size() != b.brushes.size() || a.models.size() != b.models.size() ||
-        a.lights.size() != b.lights.size())
+        a.lights.size() != b.lights.size() || a.spawns.size() != b.spawns.size())
     {
         return false;
     }
@@ -90,13 +102,23 @@ inline bool sameContent(const LevelData& a, const LevelData& b)
             return false;
         }
     }
+    for (size_t i = 0; i < a.spawns.size(); i++)
+    {
+        const LevelSpawn& x = a.spawns[i];
+        const LevelSpawn& y = b.spawns[i];
+        if (x.name != y.name || x.position != y.position || x.yawDegrees != y.yawDegrees ||
+            x.hidden != y.hidden || x.locked != y.locked)
+        {
+            return false;
+        }
+    }
     for (size_t i = 0; i < a.models.size(); i++)
     {
         const LevelModel& x = a.models[i];
         const LevelModel& y = b.models[i];
         if (x.name != y.name || x.asset != y.asset || x.position != y.position ||
             x.yawDegrees != y.yawDegrees || x.scale != y.scale ||
-            x.hidden != y.hidden || x.locked != y.locked)
+            x.hidden != y.hidden || x.locked != y.locked || x.solid != y.solid)
         {
             return false;
         }

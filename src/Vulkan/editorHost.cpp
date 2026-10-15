@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <limits>
 #include <cstring>
 #include <limits>
 #include <map>
@@ -212,7 +213,7 @@ public:
         }
         model->position = position;
         model->yawDegrees = yawDegrees;
-        if (!model->brush && !model->light)
+        if (!model->brush && !model->light && !model->spawn)
         {
             model->scale = std::max(scale, 0.001f);
         }
@@ -447,7 +448,7 @@ public:
             {
                 continue;
             }
-            if (model->light)
+            if (model->light || model->spawn)
             {
                 continue;
             }
@@ -547,6 +548,17 @@ public:
                 light.locked = model->locked;
                 level.lights.push_back(light);
             }
+            else if (model->spawn)
+            {
+                LevelSpawn spawn;
+                spawn.name = model->name;
+                spawn.position = model->position;
+                spawn.yawDegrees = model->yawDegrees;
+                spawn.selected = m_engine.isSelected(model.get());
+                spawn.hidden = model->hidden;
+                spawn.locked = model->locked;
+                level.spawns.push_back(spawn);
+            }
             else if (model->brush)
             {
                 LevelBrush brush;
@@ -571,6 +583,7 @@ public:
                 entry.selected = m_engine.isSelected(model.get());
                 entry.hidden = model->hidden;
                 entry.locked = model->locked;
+                entry.solid = model->solid;
                 level.models.push_back(entry);
             }
         }
@@ -677,6 +690,7 @@ public:
         model->scale = entry.scale;
         model->hidden = entry.hidden;
         model->locked = entry.locked;
+        model->solid = entry.solid;
         refreshVisibility(*model);
         m_engine.updateModelTransform(*model);
         m_engine.m_shadowDirty = true;
@@ -718,6 +732,68 @@ public:
         }
     }
 
+    bool spawnSpawn(const LevelSpawn& spawn, bool select) override
+    {
+        try
+        {
+            int index = acquireMarkerAsset();
+            Model* model = m_engine.addInstance(index, false);
+            if (!model)
+            {
+                return false;
+            }
+            model->name = spawn.name;
+            model->spawn = true;
+            model->position = spawn.position;
+            model->yawDegrees = spawn.yawDegrees;
+            model->hidden = spawn.hidden;
+            model->locked = spawn.locked;
+            refreshVisibility(*model);
+            m_engine.updateModelTransform(*model);
+            if (select)
+            {
+                m_engine.addToSelection(model);
+            }
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            m_engine.m_loadError = e.what();
+            std::cerr << "  [editor] Spawn creation failed - " << e.what() << "\n";
+            return false;
+        }
+    }
+
+    void setPrimarySolid(bool solid) override
+    {
+        Model* model = m_engine.m_selected;
+        if (model && m_engine.m_selection.size() == 1 && !model->locked && !model->brush && !model->light && !model->spawn)
+        {
+            model->solid = solid;
+        }
+    }
+
+    void drawSpawnMarkers() override
+    {
+        for (const auto& model : m_engine.M_MODELS)
+        {
+            if (!model->spawn || !model->visible || model->ghost)
+            {
+                continue;
+            }
+            float yaw = glm::radians(model->yawDegrees);
+            glm::vec3 forward(std::sin(yaw), 0.0f, std::cos(yaw));
+            glm::vec3 base = model->position;
+            glm::vec4 color(0.3f, 1.0f, 0.4f, 1.0f);
+            glm::vec3 tip = base + forward * 1.0f + glm::vec3(0.0f, 0.05f, 0.0f);
+            debug().line(base + glm::vec3(0.0f, 0.05f, 0.0f), tip, color, true);
+            glm::vec3 side(forward.z, 0.0f, -forward.x);
+            debug().line(tip, tip - forward * 0.25f + side * 0.15f, color, true);
+            debug().line(tip, tip - forward * 0.25f - side * 0.15f, color, true);
+            debug().line(base, base + glm::vec3(0.0f, 1.8f, 0.0f), glm::vec4(0.3f, 1.0f, 0.4f, 0.5f), true);
+        }
+    }
+
     LightDef* selectedLight() override
     {
         Model* model = m_engine.m_selected;
@@ -733,7 +809,7 @@ public:
         m_engine.m_showLightMarkers = visible;
         for (const auto& model : m_engine.M_MODELS)
         {
-            if (model->light)
+            if (model->light || model->spawn)
             {
                 refreshVisibility(*model);
             }
@@ -743,7 +819,7 @@ public:
             std::vector<Model*> kept;
             for (Model* model : m_engine.m_selection)
             {
-                if (!model->light)
+                if (!model->light && !model->spawn)
                 {
                     kept.push_back(model);
                 }
@@ -855,6 +931,16 @@ public:
                 continue;
             }
 
+            if (source->spawn)
+            {
+                LevelSpawn copy;
+                copy.name = source->name + " copy";
+                copy.position = source->position + offset;
+                copy.yawDegrees = source->yawDegrees;
+                created |= spawnSpawn(copy, true);
+                continue;
+            }
+
             if (source->light)
             {
                 LevelLight copy;
@@ -900,6 +986,7 @@ public:
             model->position = source->position + offset;
             model->yawDegrees = source->yawDegrees;
             model->scale = source->scale;
+            model->solid = source->solid;
             m_engine.updateModelTransform(*model);
             m_engine.m_shadowDirty = true;
             m_engine.addToSelection(model);
@@ -916,6 +1003,45 @@ public:
         }
         m_engine.rotateSelection(degrees);
         m_engine.deferShadowUpdate();
+    }
+
+    bool rotationFrame(glm::vec3& center, float& radius) const override
+    {
+        glm::vec3 sum(0.0f);
+        float baseY = std::numeric_limits<float>::max();
+        int count = 0;
+        for (const Model* model : m_engine.m_selection)
+        {
+            if (model->locked || model->hidden || model->ghost)
+            {
+                continue;
+            }
+            sum += model->position;
+            baseY = std::min(baseY, model->position.y);
+            count++;
+        }
+        if (count == 0)
+        {
+            return false;
+        }
+
+        center = glm::vec3(sum.x / count, baseY, sum.z / count);
+        radius = 0.0f;
+        for (const Model* model : m_engine.m_selection)
+        {
+            if (model->locked || model->hidden || model->ghost)
+            {
+                continue;
+            }
+            for (int corner = 0; corner < 4; corner++)
+            {
+                float x = (corner & 1) ? model->worldMax.x : model->worldMin.x;
+                float z = (corner & 2) ? model->worldMax.z : model->worldMin.z;
+                radius = std::max(radius, glm::length(glm::vec2(x - center.x, z - center.z)));
+            }
+        }
+        radius = std::max(radius + 0.35f, 0.75f);
+        return true;
     }
 
     void setVerticalSnap(float grid) override
@@ -963,7 +1089,7 @@ private:
 
     void refreshVisibility(Model& model) const
     {
-        model.visible = !model.hidden && !(model.light && !m_engine.m_showLightMarkers);
+        model.visible = !model.hidden && !((model.light || model.spawn) && !m_engine.m_showLightMarkers);
     }
 
     void fillItem(ItemInfo& info, const Model& model, int id) const
@@ -978,7 +1104,12 @@ private:
         info.scale = model.scale;
         info.nativeSize = model.asset ? model.asset->localMax - model.asset->localMin : glm::vec3(0.0f);
 
-        if (model.light)
+        info.solid = model.solid;
+        if (model.spawn)
+        {
+            info.kind = ItemKind::Spawn;
+        }
+        else if (model.light)
         {
             info.kind = ItemKind::Light;
         }
