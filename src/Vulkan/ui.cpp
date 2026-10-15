@@ -428,18 +428,257 @@ void BlackGlass::applySunDirection()
     m_shadowDirty = true;
 }
 
-void BlackGlass::buildUi()
+void BlackGlass::drawMainMenuBar()
 {
-    if (!m_showUi)
+    if (!ImGui::BeginMainMenuBar())
     {
-        drawQuitPrompt();
         return;
     }
 
-    ImGuiIO& io = ImGui::GetIO();
+    if (ImGui::BeginMenu("File"))
+    {
+        if (m_editor)
+        {
+            m_editor->drawFileMenu();
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Quit", "Esc"))
+        {
+            setMouseCaptured(false);
+            m_quitPrompt = true;
+        }
+        ImGui::EndMenu();
+    }
 
-    m_frameTimes[m_frameTimeOffset] = io.DeltaTime * 1000.0f;
-    m_frameTimeOffset = (m_frameTimeOffset + 1) % m_frameTimes.size();
+    if (ImGui::BeginMenu("Edit"))
+    {
+        if (m_editor)
+        {
+            m_editor->drawEditMenu();
+        }
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Add"))
+    {
+        if (m_editor)
+        {
+            m_editor->drawAddMenu();
+        }
+        ImGui::Separator();
+        if (ImGui::BeginMenu("Model"))
+        {
+            bool any = false;
+            for (size_t i = 0; i < M_LIBRARY.size(); i++)
+            {
+                if (M_LIBRARY[i]->brush || M_LIBRARY[i]->marker)
+                {
+                    continue;
+                }
+                any = true;
+                ImGui::PushID(static_cast<int>(i));
+                if (ImGui::MenuItem(M_LIBRARY[i]->name.c_str()))
+                {
+                    if (m_editor)
+                    {
+                        m_editor->cancelTool();
+                    }
+                    beginPlacement(static_cast<int>(i));
+                }
+                ImGui::PopID();
+            }
+            if (!any)
+            {
+                ImGui::TextDisabled("No models imported yet");
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Import more..."))
+            {
+                m_showLibrary = true;
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("View"))
+    {
+        if (m_editor)
+        {
+            m_editor->drawViewMenu();
+        }
+        ImGui::Separator();
+        ImGui::MenuItem("Model library", nullptr, &m_showLibrary);
+        ImGui::MenuItem("Settings", nullptr, &m_showSettings);
+        ImGui::Separator();
+        if (ImGui::MenuItem("Hide UI", "F1"))
+        {
+            m_showUi = false;
+        }
+        ImGui::EndMenu();
+    }
+
+    const char* hintText = m_mouseCaptured ? "Tab: release mouse" : "Hold right mouse to fly   F1: hide UI";
+    float width = ImGui::CalcTextSize(hintText).x;
+    ImGui::SameLine(ImGui::GetWindowWidth() - width - ImGui::GetStyle().ItemSpacing.x * 2.0f);
+    ImGui::TextDisabled("%s", hintText);
+
+    ImGui::EndMainMenuBar();
+}
+
+void BlackGlass::drawLibraryWindow()
+{
+    auto tip = [](const char* text)
+    {
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("%s", text);
+        }
+    };
+
+    ImGui::SetNextWindowPos(ImVec2(320.0f, 60.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(440.0f, 520.0f), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Model library", &m_showLibrary))
+    {
+        ImGui::TextDisabled("assets/");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Rescan"))
+        {
+            scanAssets();
+        }
+        tip("Search src/assets for .glb and .gltf models, one folder per multi-file model");
+
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputTextWithHint("##assetsearch", "Search models...", m_assetSearch, sizeof(m_assetSearch));
+
+        int shown = 0;
+        for (size_t i = 0; i < m_assetFiles.size(); i++)
+        {
+            if (!matchesSearch(m_assetFiles[i], m_assetSearch))
+            {
+                continue;
+            }
+            shown++;
+
+            std::string fullPath = std::string(BLACK_GLASS_ASSET_DIR) + "/" + m_assetFiles[i];
+            bool loaded = false;
+            for (const auto& asset : M_LIBRARY)
+            {
+                if (asset->path == fullPath)
+                {
+                    loaded = true;
+                    break;
+                }
+            }
+
+            ImGui::PushID(static_cast<int>(i));
+            ImGui::Text("%s", m_assetFiles[i].c_str());
+            ImGui::SameLine();
+            if (loaded)
+            {
+                ImGui::TextDisabled("loaded");
+            }
+            else if (ImGui::Button("Import"))
+            {
+                importAsset(fullPath);
+            }
+            ImGui::PopID();
+        }
+        if (m_assetFiles.empty())
+        {
+            ImGui::TextDisabled("No .glb or .gltf files found");
+        }
+        else if (shown == 0)
+        {
+            ImGui::TextDisabled("No models match the search");
+        }
+        if (!m_loadError.empty())
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 380.0f);
+            ImGui::TextWrapped("%s", m_loadError.c_str());
+            ImGui::PopTextWrapPos();
+            ImGui::PopStyleColor();
+        }
+
+        ImGui::Separator();
+
+        size_t unloadIndex = M_LIBRARY.size();
+        int placeIndex = -1;
+        int addIndex = -1;
+        for (size_t i = 0; i < M_LIBRARY.size(); i++)
+        {
+            if (M_LIBRARY[i]->brush || M_LIBRARY[i]->marker)
+            {
+                continue;
+            }
+
+            int instances = 0;
+            for (const auto& model : M_MODELS)
+            {
+                if (model->asset == M_LIBRARY[i] && !model->ghost)
+                {
+                    instances++;
+                }
+            }
+
+            ImGui::PushID(static_cast<int>(i));
+            ImGui::Text("%s  (%d placed)", M_LIBRARY[i]->name.c_str(), instances);
+            ImGui::SameLine();
+            bool placing = m_placingAsset == static_cast<int>(i);
+            if (ImGui::Button(placing ? "Cancel" : "Place"))
+            {
+                if (placing)
+                {
+                    cancelPlacement();
+                }
+                else
+                {
+                    placeIndex = static_cast<int>(i);
+                }
+            }
+            tip("Click the floor to place an instance");
+            ImGui::SameLine();
+            if (ImGui::Button("Add"))
+            {
+                addIndex = static_cast<int>(i);
+            }
+            tip("Add an instance automatically");
+            ImGui::SameLine();
+            if (ImGui::Button("Unload"))
+            {
+                unloadIndex = i;
+            }
+            tip("Free this model and remove all its instances");
+            ImGui::PopID();
+        }
+
+        if (m_ghost)
+        {
+            ImGui::TextDisabled("Click the floor to place, Shift-click to keep placing");
+            ImGui::TextDisabled("Scroll to rotate, Delete to cancel");
+        }
+
+        if (placeIndex >= 0)
+        {
+            beginPlacement(placeIndex);
+        }
+        if (addIndex >= 0)
+        {
+            selectOnly(addInstance(addIndex, true));
+        }
+        if (unloadIndex < M_LIBRARY.size())
+        {
+            removeAsset(unloadIndex);
+        }
+
+    }
+    ImGui::End();
+}
+
+void BlackGlass::drawSettingsWindow()
+{
+    ImGuiIO& io = ImGui::GetIO();
 
     auto tip = [](const char* text)
     {
@@ -454,449 +693,241 @@ void BlackGlass::buildUi()
         applySunDirection();
     };
 
-    ImGui::SetNextWindowPos(ImVec2(12.0f, 12.0f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(440.0f, 640.0f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowBgAlpha(0.88f);
-    ImGui::Begin("Black Glass");
-
-    ImGui::Text("%.1f FPS  (%.2f ms)", io.Framerate, 1000.0f / std::max(io.Framerate, 1.0f));
-    ImGui::TextDisabled("%s", m_mouseCaptured ? "Tab: release mouse" : "Hold right mouse to fly, Tab to toggle");
-    ImGui::TextDisabled("F1: hide UI    Esc: quit");
-
-    if (ImGui::BeginTabBar("MainTabs"))
+    ImGui::SetNextWindowPos(ImVec2(360.0f, 80.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(440.0f, 600.0f), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Settings", &m_showSettings))
     {
-        if (ImGui::BeginTabItem("Scene"))
+        ImGui::Text("%.1f FPS  (%.2f ms)", io.Framerate, 1000.0f / std::max(io.Framerate, 1.0f));
+
+        if (ImGui::BeginTabBar("SettingsTabs"))
         {
-            if (ImGui::CollapsingHeader("Model library", ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::BeginTabItem("Rendering"))
             {
-                ImGui::TextDisabled("assets/");
+                if (ImGui::Button("Save settings"))
+                {
+                    m_settingsStatus = saveSettings(m_settings, SETTINGS_FILE)
+                        ? std::string("Saved to ") + SETTINGS_FILE
+                        : std::string("Could not write ") + SETTINGS_FILE;
+                }
+                tip("Write all rendering settings to black_glass_settings.cfg in the working directory");
                 ImGui::SameLine();
-                if (ImGui::SmallButton("Rescan"))
+                if (ImGui::Button("Load settings"))
                 {
-                    scanAssets();
-                }
-                tip("Search src/assets for .glb and .gltf models, one folder per multi-file model");
-
-                ImGui::SetNextItemWidth(-1.0f);
-                ImGui::InputTextWithHint("##assetsearch", "Search models...", m_assetSearch, sizeof(m_assetSearch));
-
-                int shown = 0;
-                for (size_t i = 0; i < m_assetFiles.size(); i++)
-                {
-                    if (!matchesSearch(m_assetFiles[i], m_assetSearch))
+                    if (loadSettings(m_settings, SETTINGS_FILE))
                     {
-                        continue;
+                        applySun();
+                        m_settingsStatus = std::string("Loaded ") + SETTINGS_FILE;
                     }
-                    shown++;
-
-                    std::string fullPath = std::string(BLACK_GLASS_ASSET_DIR) + "/" + m_assetFiles[i];
-                    bool loaded = false;
-                    for (const auto& asset : M_LIBRARY)
+                    else
                     {
-                        if (asset->path == fullPath)
-                        {
-                            loaded = true;
-                            break;
-                        }
+                        m_settingsStatus = std::string("Could not read ") + SETTINGS_FILE;
                     }
+                }
+                tip("Restore settings saved earlier");
+                ImGui::SameLine();
+                if (ImGui::Button("Reset all"))
+                {
+                    m_settings = m_defaultSettings;
+                    applySun();
+                    m_settingsStatus = "Reset to defaults";
+                }
+                tip("Restore every rendering setting to its startup value");
+                if (!m_settingsStatus.empty())
+                {
+                    ImGui::TextDisabled("%s", m_settingsStatus.c_str());
+                }
 
-                    ImGui::PushID(static_cast<int>(i));
-                    ImGui::Text("%s", m_assetFiles[i].c_str());
-                    ImGui::SameLine();
-                    if (loaded)
+                if (ImGui::CollapsingHeader("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
+                {
+                    bool lightChanged = false;
+                    lightChanged |= ImGui::SliderFloat("Sun azimuth", &m_settings.sunAzimuth, -180.0f, 180.0f, "%.0f deg");
+                    lightChanged |= ImGui::SliderFloat("Sun elevation", &m_settings.sunElevation, 5.0f, 90.0f, "%.0f deg");
+                    ImGui::SliderFloat("Sun intensity", &m_settings.sunIntensity, 0.0f, 10.0f, "%.2f");
+                    ImGui::SliderFloat("Environment", &m_settings.envIntensity, 0.0f, 4.0f, "%.2f");
+                    tip("Brightness of image-based lighting and the sky");
+                    ImGui::Checkbox("Shadows", &m_settings.shadows);
+                    if (M_IBLFROMFILE)
                     {
-                        ImGui::TextDisabled("loaded");
+                        ImGui::TextDisabled("Sun is off while an HDR environment is loaded");
                     }
-                    else if (ImGui::Button("Import"))
+                    if (ImGui::SmallButton("Reset##lighting"))
                     {
-                        importAsset(fullPath);
-                    }
-                    ImGui::PopID();
-                }
-                if (m_assetFiles.empty())
-                {
-                    ImGui::TextDisabled("No .glb or .gltf files found");
-                }
-                else if (shown == 0)
-                {
-                    ImGui::TextDisabled("No models match the search");
-                }
-                if (!m_loadError.empty())
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
-                    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 380.0f);
-                    ImGui::TextWrapped("%s", m_loadError.c_str());
-                    ImGui::PopTextWrapPos();
-                    ImGui::PopStyleColor();
-                }
-
-                ImGui::Separator();
-
-                size_t unloadIndex = M_LIBRARY.size();
-                int placeIndex = -1;
-                int addIndex = -1;
-                for (size_t i = 0; i < M_LIBRARY.size(); i++)
-                {
-                    if (M_LIBRARY[i]->brush || M_LIBRARY[i]->marker)
-                    {
-                        continue;
+                        m_settings.sunIntensity = m_defaultSettings.sunIntensity;
+                        m_settings.sunAzimuth = m_defaultSettings.sunAzimuth;
+                        m_settings.sunElevation = m_defaultSettings.sunElevation;
+                        m_settings.envIntensity = m_defaultSettings.envIntensity;
+                        m_settings.shadows = m_defaultSettings.shadows;
+                        lightChanged = true;
                     }
 
-                    int instances = 0;
-                    for (const auto& model : M_MODELS)
+                    if (lightChanged)
                     {
-                        if (model->asset == M_LIBRARY[i] && !model->ghost)
-                        {
-                            instances++;
-                        }
+                        applySun();
                     }
-
-                    ImGui::PushID(static_cast<int>(i));
-                    ImGui::Text("%s  (%d placed)", M_LIBRARY[i]->name.c_str(), instances);
-                    ImGui::SameLine();
-                    bool placing = m_placingAsset == static_cast<int>(i);
-                    if (ImGui::Button(placing ? "Cancel" : "Place"))
-                    {
-                        if (placing)
-                        {
-                            cancelPlacement();
-                        }
-                        else
-                        {
-                            placeIndex = static_cast<int>(i);
-                        }
-                    }
-                    tip("Click the floor to place an instance");
-                    ImGui::SameLine();
-                    if (ImGui::Button("Add"))
-                    {
-                        addIndex = static_cast<int>(i);
-                    }
-                    tip("Add an instance automatically");
-                    ImGui::SameLine();
-                    if (ImGui::Button("Unload"))
-                    {
-                        unloadIndex = i;
-                    }
-                    tip("Free this model and remove all its instances");
-                    ImGui::PopID();
                 }
 
-                if (m_ghost)
+                if (ImGui::CollapsingHeader("Effects", ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    ImGui::TextDisabled("Click the floor to place, Shift-click to keep placing");
-                    ImGui::TextDisabled("Scroll to rotate, Delete to cancel");
+                    ImGui::Checkbox("SSAO", &m_settings.ssao);
+                    tip("Screen-space ambient occlusion, costs a depth prepass and a half-resolution pass");
+                    ImGui::SliderFloat("SSAO radius", &m_settings.ssaoRadius, 0.1f, 3.0f, "%.2f");
+                    tip("Sampling radius relative to the scene size");
+                    ImGui::SliderFloat("SSAO intensity", &m_settings.ssaoIntensity, 0.2f, 3.0f, "%.2f");
+                    tip("Contrast of the occlusion term");
+                    ImGui::Checkbox("Floor reflections", &m_settings.reflections);
+                    tip("Render the scene mirrored in the floor, costs an extra scene pass");
+                    ImGui::SliderFloat("Reflection strength", &m_settings.reflectionStrength, 0.0f, 6.0f, "%.2f");
+                    ImGui::SliderFloat("Floor roughness", &m_settings.floorRoughness, 0.05f, 1.0f, "%.2f");
+                    tip("Lower values give sharper reflections");
+                    if (ImGui::SmallButton("Reset##effects"))
+                    {
+                        m_settings.ssao = m_defaultSettings.ssao;
+                        m_settings.ssaoRadius = m_defaultSettings.ssaoRadius;
+                        m_settings.ssaoIntensity = m_defaultSettings.ssaoIntensity;
+                        m_settings.reflections = m_defaultSettings.reflections;
+                        m_settings.reflectionStrength = m_defaultSettings.reflectionStrength;
+                        m_settings.floorRoughness = m_defaultSettings.floorRoughness;
+                    }
                 }
 
-                if (placeIndex >= 0)
+                if (ImGui::CollapsingHeader("Post-processing", ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    beginPlacement(placeIndex);
+                    float stops = std::log2(m_settings.exposure);
+                    if (ImGui::SliderFloat("Exposure (EV)", &stops, -4.0f, 4.0f, "%.2f"))
+                    {
+                        m_settings.exposure = std::exp2(stops);
+                    }
+                    tip("Exposure in stops, 0 is neutral");
+                    ImGui::Combo("Tonemapper", &m_settings.tonemapper, TONEMAPPER_NAMES, TONEMAPPER_COUNT);
+                    ImGui::Checkbox("Bloom", &m_settings.bloom);
+                    ImGui::SliderFloat("Bloom strength", &m_settings.bloomStrength, 0.0f, 0.3f, "%.3f");
+                    if (ImGui::SmallButton("Reset##post"))
+                    {
+                        m_settings.exposure = m_defaultSettings.exposure;
+                        m_settings.tonemapper = m_defaultSettings.tonemapper;
+                        m_settings.bloom = m_defaultSettings.bloom;
+                        m_settings.bloomStrength = m_defaultSettings.bloomStrength;
+                    }
                 }
-                if (addIndex >= 0)
-                {
-                    selectOnly(addInstance(addIndex, true));
-                }
-                if (unloadIndex < M_LIBRARY.size())
-                {
-                    removeAsset(unloadIndex);
-                }
+
+
+
+                ImGui::EndTabItem();
             }
 
-            if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::TextDisabled("Click a model to select, drag to move, scroll to rotate");
-
-                size_t removeIndex = M_MODELS.size();
-                for (size_t i = 0; i < M_MODELS.size(); i++)
-                {
-                    Model& model = *M_MODELS[i];
-                    if (model.ghost)
-                    {
-                        continue;
-                    }
-
-                    ImGui::PushID(static_cast<int>(i));
-                    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen;
-                    if (isSelected(&model))
-                    {
-                        flags |= ImGuiTreeNodeFlags_Selected;
-                    }
-                    bool open = ImGui::TreeNodeEx(model.name.c_str(), flags);
-                    if (ImGui::IsItemClicked())
-                    {
-                        if (ImGui::GetIO().KeyShift)
-                        {
-                            toggleSelection(&model);
-                        }
-                        else
-                        {
-                            selectOnly(&model);
-                        }
-                    }
-                    if (open)
-                    {
-                        bool changed = false;
-                        changed |= ImGui::Checkbox("Visible", &model.visible);
-                        changed |= ImGui::DragFloat3("Position", &model.position.x, 0.02f);
-                        changed |= ImGui::SliderFloat("Yaw", &model.yawDegrees, -180.0f, 180.0f, "%.0f deg");
-                        changed |= ImGui::SliderFloat("Scale", &model.scale, 0.001f, 100.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
-                        tip("Uniform scale applied on top of the model's native size");
-
-                        glm::vec3 size = model.asset->localMax - model.asset->localMin;
-                        if (model.brush)
-                        {
-                            size *= model.brush->size;
-                        }
-                        float longest = std::max(size.x, std::max(size.y, size.z));
-                        ImGui::TextDisabled("Native size  %.2f x %.2f x %.2f", size.x, size.y, size.z);
-
-                        ImGui::SetNextItemWidth(90.0f);
-                        ImGui::DragFloat("##fitsize", &m_fitSize, 0.1f, 0.1f, 10000.0f, "%.1f");
-                        tip("Target length of the model's longest side");
-                        ImGui::SameLine();
-                        if (ImGui::Button("Fit to size") && longest > 1e-6f)
-                        {
-                            model.scale = m_fitSize / longest;
-                            changed = true;
-                        }
-                        tip("Scale so the longest side matches the target length");
-                        ImGui::SameLine();
-                        if (ImGui::Button("Reset scale"))
-                        {
-                            model.scale = 1.0f;
-                            changed = true;
-                        }
-
-                        if (ImGui::Button("Remove"))
-                        {
-                            removeIndex = i;
-                        }
-                        if (changed)
-                        {
-                            m_shadowDirty = true;
-                        }
-                        ImGui::TreePop();
-                    }
-                    ImGui::PopID();
-                }
-
-                if (ImGui::Button("Frame scene"))
-                {
-                    frameScene();
-                }
-                tip("Move the camera to see every model");
-
-                if (removeIndex < M_MODELS.size())
-                {
-                    removeModel(removeIndex);
-                }
-            }
-
-            if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::BeginTabItem("Camera"))
             {
                 ImGui::SliderFloat("Field of view", &m_fov, 20.0f, 90.0f, "%.0f deg");
                 ImGui::SliderFloat("Move speed", &m_camera.speed, 0.1f, 20.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
                 tip("Fly speed while holding the right mouse button");
                 ImGui::Text("Position  %.2f  %.2f  %.2f", m_camera.position.x, m_camera.position.y, m_camera.position.z);
+
+                ImGui::EndTabItem();
             }
 
-            ImGui::EndTabItem();
-        }
-
-        if (ImGui::BeginTabItem("Editor"))
-        {
-            if (m_editor)
+            if (ImGui::BeginTabItem("Debug"))
             {
-                m_editor->drawPanel();
-            }
-            ImGui::EndTabItem();
-        }
-
-        if (ImGui::BeginTabItem("Rendering"))
-        {
-            if (ImGui::Button("Save settings"))
-            {
-                m_settingsStatus = saveSettings(m_settings, SETTINGS_FILE)
-                    ? std::string("Saved to ") + SETTINGS_FILE
-                    : std::string("Could not write ") + SETTINGS_FILE;
-            }
-            tip("Write all rendering settings to black_glass_settings.cfg in the working directory");
-            ImGui::SameLine();
-            if (ImGui::Button("Load settings"))
-            {
-                if (loadSettings(m_settings, SETTINGS_FILE))
+                if (ImGui::CollapsingHeader("Performance", ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    applySun();
-                    m_settingsStatus = std::string("Loaded ") + SETTINGS_FILE;
-                }
-                else
-                {
-                    m_settingsStatus = std::string("Could not read ") + SETTINGS_FILE;
-                }
-            }
-            tip("Restore settings saved earlier");
-            ImGui::SameLine();
-            if (ImGui::Button("Reset all"))
-            {
-                m_settings = m_defaultSettings;
-                applySun();
-                m_settingsStatus = "Reset to defaults";
-            }
-            tip("Restore every rendering setting to its startup value");
-            if (!m_settingsStatus.empty())
-            {
-                ImGui::TextDisabled("%s", m_settingsStatus.c_str());
-            }
-
-            if (ImGui::CollapsingHeader("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                bool lightChanged = false;
-                lightChanged |= ImGui::SliderFloat("Sun azimuth", &m_settings.sunAzimuth, -180.0f, 180.0f, "%.0f deg");
-                lightChanged |= ImGui::SliderFloat("Sun elevation", &m_settings.sunElevation, 5.0f, 90.0f, "%.0f deg");
-                ImGui::SliderFloat("Sun intensity", &m_settings.sunIntensity, 0.0f, 10.0f, "%.2f");
-                ImGui::SliderFloat("Environment", &m_settings.envIntensity, 0.0f, 4.0f, "%.2f");
-                tip("Brightness of image-based lighting and the sky");
-                ImGui::Checkbox("Shadows", &m_settings.shadows);
-                if (M_IBLFROMFILE)
-                {
-                    ImGui::TextDisabled("Sun is off while an HDR environment is loaded");
-                }
-                if (ImGui::SmallButton("Reset##lighting"))
-                {
-                    m_settings.sunIntensity = m_defaultSettings.sunIntensity;
-                    m_settings.sunAzimuth = m_defaultSettings.sunAzimuth;
-                    m_settings.sunElevation = m_defaultSettings.sunElevation;
-                    m_settings.envIntensity = m_defaultSettings.envIntensity;
-                    m_settings.shadows = m_defaultSettings.shadows;
-                    lightChanged = true;
-                }
-
-                if (lightChanged)
-                {
-                    applySun();
-                }
-            }
-
-            if (ImGui::CollapsingHeader("Effects", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::Checkbox("SSAO", &m_settings.ssao);
-                tip("Screen-space ambient occlusion, costs a depth prepass and a half-resolution pass");
-                ImGui::SliderFloat("SSAO radius", &m_settings.ssaoRadius, 0.1f, 3.0f, "%.2f");
-                tip("Sampling radius relative to the scene size");
-                ImGui::SliderFloat("SSAO intensity", &m_settings.ssaoIntensity, 0.2f, 3.0f, "%.2f");
-                tip("Contrast of the occlusion term");
-                ImGui::Checkbox("Floor reflections", &m_settings.reflections);
-                tip("Render the scene mirrored in the floor, costs an extra scene pass");
-                ImGui::SliderFloat("Reflection strength", &m_settings.reflectionStrength, 0.0f, 6.0f, "%.2f");
-                ImGui::SliderFloat("Floor roughness", &m_settings.floorRoughness, 0.05f, 1.0f, "%.2f");
-                tip("Lower values give sharper reflections");
-                if (ImGui::SmallButton("Reset##effects"))
-                {
-                    m_settings.ssao = m_defaultSettings.ssao;
-                    m_settings.ssaoRadius = m_defaultSettings.ssaoRadius;
-                    m_settings.ssaoIntensity = m_defaultSettings.ssaoIntensity;
-                    m_settings.reflections = m_defaultSettings.reflections;
-                    m_settings.reflectionStrength = m_defaultSettings.reflectionStrength;
-                    m_settings.floorRoughness = m_defaultSettings.floorRoughness;
-                }
-            }
-
-            if (ImGui::CollapsingHeader("Post-processing", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                float stops = std::log2(m_settings.exposure);
-                if (ImGui::SliderFloat("Exposure (EV)", &stops, -4.0f, 4.0f, "%.2f"))
-                {
-                    m_settings.exposure = std::exp2(stops);
-                }
-                tip("Exposure in stops, 0 is neutral");
-                ImGui::Combo("Tonemapper", &m_settings.tonemapper, TONEMAPPER_NAMES, TONEMAPPER_COUNT);
-                ImGui::Checkbox("Bloom", &m_settings.bloom);
-                ImGui::SliderFloat("Bloom strength", &m_settings.bloomStrength, 0.0f, 0.3f, "%.3f");
-                if (ImGui::SmallButton("Reset##post"))
-                {
-                    m_settings.exposure = m_defaultSettings.exposure;
-                    m_settings.tonemapper = m_defaultSettings.tonemapper;
-                    m_settings.bloom = m_defaultSettings.bloom;
-                    m_settings.bloomStrength = m_defaultSettings.bloomStrength;
-                }
-            }
-
-            ImGui::EndTabItem();
-        }
-
-        if (ImGui::BeginTabItem("Debug"))
-        {
-            if (ImGui::CollapsingHeader("Performance", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                float peak = 16.7f;
-                for (float ms : m_frameTimes)
-                {
-                    peak = std::max(peak, ms);
-                }
-                peak = std::ceil(peak / 5.0f) * 5.0f;
-
-                char overlay[32];
-                std::snprintf(overlay, sizeof(overlay), "%.2f ms", io.DeltaTime * 1000.0f);
-                ImGui::PlotLines("##frametimes", m_frameTimes.data(), static_cast<int>(m_frameTimes.size()),
-                                 static_cast<int>(m_frameTimeOffset), overlay, 0.0f, peak, ImVec2(-1.0f, 60.0f));
-                tip("Frame time over the last 120 frames");
-
-                if (!m_timestampsSupported)
-                {
-                    ImGui::TextDisabled("GPU timings are not supported on this device");
-                }
-                else
-                {
-                    if (ImGui::Checkbox("Measure GPU stages", &m_gpuTimingsEnabled))
+                    float peak = 16.7f;
+                    for (float ms : m_frameTimes)
                     {
-                        for (float& ms : m_gpuSegmentsMs)
+                        peak = std::max(peak, ms);
+                    }
+                    peak = std::ceil(peak / 5.0f) * 5.0f;
+
+                    char overlay[32];
+                    std::snprintf(overlay, sizeof(overlay), "%.2f ms", io.DeltaTime * 1000.0f);
+                    ImGui::PlotLines("##frametimes", m_frameTimes.data(), static_cast<int>(m_frameTimes.size()),
+                                     static_cast<int>(m_frameTimeOffset), overlay, 0.0f, peak, ImVec2(-1.0f, 60.0f));
+                    tip("Frame time over the last 120 frames");
+
+                    if (!m_timestampsSupported)
+                    {
+                        ImGui::TextDisabled("GPU timings are not supported on this device");
+                    }
+                    else
+                    {
+                        if (ImGui::Checkbox("Measure GPU stages", &m_gpuTimingsEnabled))
                         {
-                            ms = 0.0f;
+                            for (float& ms : m_gpuSegmentsMs)
+                            {
+                                ms = 0.0f;
+                            }
+                            for (bool& recorded : m_timestampRecorded)
+                            {
+                                recorded = false;
+                            }
                         }
-                        for (bool& recorded : m_timestampRecorded)
+                        tip("Timestamp queries can cost frame time on some GPUs, leave off unless measuring");
+                    }
+
+                    if (m_timestampsSupported && m_gpuTimingsEnabled)
+                    {
+                        static const char* const names[GPU_SEGMENTS] = {
+                            "SSAO", "Reflections", "Main pass", "Glass", "Bloom", "Composite + UI"
+                        };
+
+                        float total = 0.0f;
+                        for (uint32_t i = 0; i < GPU_SEGMENTS; i++)
                         {
-                            recorded = false;
+                            total += m_gpuSegmentsMs[i];
+                        }
+                        ImGui::Text("GPU  %.2f ms", total);
+                        tip("Smoothed GPU time per stage, a stage reads 0 when it is switched off");
+
+                        for (uint32_t i = 0; i < GPU_SEGMENTS; i++)
+                        {
+                            char label[64];
+                            std::snprintf(label, sizeof(label), "%s  %.2f ms", names[i], m_gpuSegmentsMs[i]);
+                            ImGui::ProgressBar(total > 0.0f ? m_gpuSegmentsMs[i] / total : 0.0f, ImVec2(-1.0f, 0.0f), label);
                         }
                     }
-                    tip("Timestamp queries can cost frame time on some GPUs, leave off unless measuring");
                 }
 
-                if (m_timestampsSupported && m_gpuTimingsEnabled)
+                if (ImGui::CollapsingHeader("Debug view", ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    static const char* const names[GPU_SEGMENTS] = {
-                        "SSAO", "Reflections", "Main pass", "Glass", "Bloom", "Composite + UI"
-                    };
-
-                    float total = 0.0f;
-                    for (uint32_t i = 0; i < GPU_SEGMENTS; i++)
-                    {
-                        total += m_gpuSegmentsMs[i];
-                    }
-                    ImGui::Text("GPU  %.2f ms", total);
-                    tip("Smoothed GPU time per stage, a stage reads 0 when it is switched off");
-
-                    for (uint32_t i = 0; i < GPU_SEGMENTS; i++)
-                    {
-                        char label[64];
-                        std::snprintf(label, sizeof(label), "%s  %.2f ms", names[i], m_gpuSegmentsMs[i]);
-                        ImGui::ProgressBar(total > 0.0f ? m_gpuSegmentsMs[i] / total : 0.0f, ImVec2(-1.0f, 0.0f), label);
-                    }
+                    ImGui::Combo("View", &m_debugView, DEBUG_VIEW_NAMES, IM_ARRAYSIZE(DEBUG_VIEW_NAMES));
                 }
+
+
+
+                ImGui::EndTabItem();
             }
 
-            if (ImGui::CollapsingHeader("Debug view", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::Combo("View", &m_debugView, DEBUG_VIEW_NAMES, IM_ARRAYSIZE(DEBUG_VIEW_NAMES));
-            }
-
-            ImGui::EndTabItem();
+            ImGui::EndTabBar();
         }
+    }
+    ImGui::End();
+}
 
-        ImGui::EndTabBar();
+void BlackGlass::buildUi()
+{
+    if (!m_showUi)
+    {
+        drawQuitPrompt();
+        return;
     }
 
-    ImGui::End();
+    ImGuiIO& io = ImGui::GetIO();
 
+    m_frameTimes[m_frameTimeOffset] = io.DeltaTime * 1000.0f;
+    m_frameTimeOffset = (m_frameTimeOffset + 1) % m_frameTimes.size();
+
+    drawMainMenuBar();
+
+    if (m_editor)
+    {
+        m_editor->drawPanels(io.Framerate);
+    }
+    if (m_showLibrary)
+    {
+        drawLibraryWindow();
+    }
+    if (m_showSettings)
+    {
+        drawSettingsWindow();
+    }
     if (m_editor)
     {
         m_editor->drawOverlayUi();

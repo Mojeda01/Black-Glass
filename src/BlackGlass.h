@@ -73,6 +73,8 @@ struct Model
     std::shared_ptr<ModelAsset> asset;
     std::string name;
     bool visible = true;
+    bool hidden = false;
+    bool locked = false;
     bool isGround = false;
     bool ghost = false;
     glm::vec3 position{ 0.0f };
@@ -191,6 +193,9 @@ public:
     void onRightRelease();
     void onScroll(double delta);
     void deleteSelected();
+    void drawMainMenuBar();
+    void drawLibraryWindow();
+    void drawSettingsWindow();
     bool handleEditorKey(int key, int mods, bool repeat);
     void noteEditorInput();
     Camera& camera() { return m_camera; }
@@ -207,6 +212,8 @@ private:
     bool m_shadowDirty = false;
     bool m_imguiReady = false;
     bool m_showUi = true;
+    bool m_showLibrary = false;
+    bool m_showSettings = false;
     static constexpr uint32_t GPU_TIMESTAMPS = 7;
     static constexpr uint32_t GPU_SEGMENTS = GPU_TIMESTAMPS - 1;
     static constexpr size_t FRAME_HISTORY = 120;

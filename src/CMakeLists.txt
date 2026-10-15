@@ -75,6 +75,7 @@ add_library(black_glass_engine STATIC
     Editor/ProceduralTextures.cpp
     Editor/LevelIO.cpp
     Editor/Editor.cpp
+    Editor/EditorUi.cpp
     initVulkan.cpp
 )
 

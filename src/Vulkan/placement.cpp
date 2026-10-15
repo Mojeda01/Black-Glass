@@ -98,7 +98,7 @@ Model* BlackGlass::pickModel(const glm::vec3& origin, const glm::vec3& direction
     float bestDistance = std::numeric_limits<float>::max();
     for (auto& model : M_MODELS)
     {
-        if (!model->visible || model->ghost)
+        if (!model->visible || model->ghost || model->locked)
         {
             continue;
         }
@@ -166,24 +166,32 @@ void BlackGlass::toggleSelection(Model* model)
 
 void BlackGlass::rotateSelection(float degrees)
 {
-    if (m_selection.empty())
+    std::vector<Model*> movable;
+    for (Model* model : m_selection)
+    {
+        if (!model->locked)
+        {
+            movable.push_back(model);
+        }
+    }
+    if (movable.empty())
     {
         return;
     }
 
     glm::vec2 center(0.0f);
-    for (const Model* model : m_selection)
+    for (const Model* model : movable)
     {
         center += glm::vec2(model->position.x, model->position.z);
     }
-    center /= static_cast<float>(m_selection.size());
+    center /= static_cast<float>(movable.size());
 
     float radians = glm::radians(degrees);
     float cosine = std::cos(radians);
     float sine = std::sin(radians);
-    bool orbit = m_selection.size() > 1;
+    bool orbit = movable.size() > 1;
 
-    for (Model* model : m_selection)
+    for (Model* model : movable)
     {
         if (orbit)
         {
@@ -276,6 +284,10 @@ void BlackGlass::updateInteraction()
             float deltaZ = hit.z + m_dragOffset.y - m_selected->position.z;
             for (Model* model : m_selection)
             {
+                if (model->locked)
+                {
+                    continue;
+                }
                 model->position.x += deltaX;
                 model->position.z += deltaZ;
                 updateModelTransform(*model);
@@ -442,6 +454,10 @@ void BlackGlass::deleteSelected()
     std::vector<Model*> doomed = m_selection;
     for (Model* target : doomed)
     {
+        if (target->locked)
+        {
+            continue;
+        }
         for (size_t i = 0; i < M_MODELS.size(); i++)
         {
             if (M_MODELS[i].get() == target)

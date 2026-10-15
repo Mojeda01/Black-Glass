@@ -19,6 +19,16 @@ public:
     virtual int selectionCount() const = 0;
     virtual bool selectionBounds(int index, glm::mat4& transform, glm::vec3& localMin, glm::vec3& localMax) const = 0;
     virtual void clearSelection() = 0;
+    virtual void listItems(std::vector<ItemInfo>& items) const = 0;
+    virtual bool primaryItem(ItemInfo& info) const = 0;
+    virtual void selectItem(int id, bool additive) = 0;
+    virtual void setItemHidden(int id, bool hidden) = 0;
+    virtual void setItemLocked(int id, bool locked) = 0;
+    virtual void renameItem(int id, const std::string& name) = 0;
+    virtual void setPrimaryTransform(const glm::vec3& position, float yawDegrees, float scale) = 0;
+    virtual void focusItem(int id) = 0;
+    virtual void frameAll() = 0;
+    virtual void deleteSelection() = 0;
     virtual void selectAll() = 0;
     virtual void cancelPlacement() = 0;
     virtual bool viewInfo(ViewInfo& view) const = 0;

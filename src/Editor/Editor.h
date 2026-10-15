@@ -15,10 +15,14 @@ enum class EditorCommand
     Duplicate,
     SelectAll,
     DrawTool,
+    SelectTool,
     ToggleGrid,
     Rotate,
     Save,
-    AddLight
+    AddLight,
+    Focus,
+    Rename,
+    Delete
 };
 
 class Editor
@@ -26,7 +30,12 @@ class Editor
 public:
     explicit Editor(EditorHost& host);
 
-    void drawPanel();
+    void drawFileMenu();
+    void drawEditMenu();
+    void drawAddMenu();
+    void drawViewMenu();
+    void drawPanels(float framesPerSecond);
+
     void update(bool overlayVisible);
     void drawOverlayUi();
     bool onLeftPress();
@@ -34,18 +43,25 @@ public:
     bool cancelTool();
     bool execute(EditorCommand command);
     void noteInput() { m_historyDirty = true; }
+    bool dirty() const { return m_dirty; }
+    const char* levelName() const { return m_levelName; }
 
 private:
-    void drawBrushSection();
-    void drawSelectedBrushSection();
+    void drawToolsPanel();
+    void drawOutlinerPanel();
+    void drawInspectorPanel();
+    void drawStatusBar(float framesPerSecond);
+    void drawSaveAsPopup();
     void drawBrushProperties(BrushDef& brush);
-    void drawLevelSection();
-    void drawLightSection();
     void drawLightProperties(LightDef& light);
+    void drawModelProperties(const ItemInfo& info);
+    void drawSelectionActions(bool locked);
     bool drawTextureControls(BrushDef& brush, const char* suffix);
-    void addLight();
-    void refreshTextureList();
 
+    void addBrush(BrushShape shape);
+    void addLight();
+    void newLevel();
+    void refreshTextureList();
     void toggleDrawTool();
     void trackHistory(bool overlayVisible);
     void flushHistory();
@@ -54,7 +70,6 @@ private:
     bool undo();
     bool redo();
 
-    void addBrush();
     void createBrushFromBounds(const BrushBounds& bounds);
     void drawGrid();
     void drawSelection();
@@ -72,13 +87,26 @@ private:
     std::string m_label;
     bool m_showGrid = true;
     bool m_showSelection = true;
+    bool m_showLightMarkers = true;
+    bool m_showTools = true;
+    bool m_showOutliner = true;
+    bool m_showInspector = true;
     int m_nextBrush = 1;
     int m_nextLight = 1;
-    bool m_showLightMarkers = true;
     std::vector<std::string> m_textureNames;
     char m_levelName[64] = "level";
     std::vector<std::string> m_levelFiles;
     std::string m_status;
     History m_history;
     bool m_historyDirty = false;
+    bool m_dirty = false;
+
+    std::vector<ItemInfo> m_items;
+    char m_outlinerFilter[64] = {};
+    char m_nameBuffer[64] = {};
+    bool m_nameEditing = false;
+    bool m_focusName = false;
+    bool m_requestSaveAs = false;
+    char m_saveAsName[64] = {};
+    float m_fitSize = 10.0f;
 };

@@ -206,7 +206,7 @@ void BlackGlass::updateUniformBuffer(uint32_t currentImage)
     std::vector<std::pair<float, const Model*>> activeLights;
     for (const auto& model : M_MODELS)
     {
-        if (model->light && !model->ghost && model->light->enabled)
+        if (model->light && !model->ghost && !model->hidden && model->light->enabled)
         {
             glm::vec3 center = (model->worldMin + model->worldMax) * 0.5f;
             activeLights.emplace_back(glm::distance(center, m_camera.position), model.get());

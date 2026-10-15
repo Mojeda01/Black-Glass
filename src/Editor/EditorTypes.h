@@ -2,7 +2,31 @@
 #include <glm/glm.hpp>
 
 #include <cmath>
+#include <string>
 #include <vector>
+
+enum class ItemKind
+{
+    Box,
+    Ramp,
+    Stairs,
+    Model,
+    Light
+};
+
+struct ItemInfo
+{
+    int id = -1;
+    std::string name;
+    ItemKind kind = ItemKind::Box;
+    bool visible = true;
+    bool locked = false;
+    bool selected = false;
+    glm::vec3 position{ 0.0f };
+    float yawDegrees = 0.0f;
+    float scale = 1.0f;
+    glm::vec3 nativeSize{ 0.0f };
+};
 
 struct ViewInfo
 {

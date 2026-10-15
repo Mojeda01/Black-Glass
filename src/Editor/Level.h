@@ -15,6 +15,8 @@ struct LevelBrush
     glm::vec3 position{ 0.0f };
     float yawDegrees = 0.0f;
     bool selected = false;
+    bool hidden = false;
+    bool locked = false;
 };
 
 struct LevelModel
@@ -25,6 +27,8 @@ struct LevelModel
     float yawDegrees = 0.0f;
     float scale = 1.0f;
     bool selected = false;
+    bool hidden = false;
+    bool locked = false;
 };
 
 struct LevelLight
@@ -33,6 +37,8 @@ struct LevelLight
     LightDef def;
     glm::vec3 position{ 0.0f };
     bool selected = false;
+    bool hidden = false;
+    bool locked = false;
 };
 
 struct LevelCamera
@@ -68,7 +74,8 @@ inline bool sameContent(const LevelData& a, const LevelData& b)
     {
         const LevelBrush& x = a.brushes[i];
         const LevelBrush& y = b.brushes[i];
-        if (x.name != y.name || !(x.def == y.def) || x.position != y.position || x.yawDegrees != y.yawDegrees)
+        if (x.name != y.name || !(x.def == y.def) || x.position != y.position || x.yawDegrees != y.yawDegrees ||
+            x.hidden != y.hidden || x.locked != y.locked)
         {
             return false;
         }
@@ -77,7 +84,8 @@ inline bool sameContent(const LevelData& a, const LevelData& b)
     {
         const LevelLight& x = a.lights[i];
         const LevelLight& y = b.lights[i];
-        if (x.name != y.name || !(x.def == y.def) || x.position != y.position)
+        if (x.name != y.name || !(x.def == y.def) || x.position != y.position ||
+            x.hidden != y.hidden || x.locked != y.locked)
         {
             return false;
         }
@@ -87,7 +95,8 @@ inline bool sameContent(const LevelData& a, const LevelData& b)
         const LevelModel& x = a.models[i];
         const LevelModel& y = b.models[i];
         if (x.name != y.name || x.asset != y.asset || x.position != y.position ||
-            x.yawDegrees != y.yawDegrees || x.scale != y.scale)
+            x.yawDegrees != y.yawDegrees || x.scale != y.scale ||
+            x.hidden != y.hidden || x.locked != y.locked)
         {
             return false;
         }

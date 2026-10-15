@@ -65,13 +65,14 @@ void Editor::refreshLevelList()
     std::sort(m_levelFiles.begin(), m_levelFiles.end());
 }
 
-void Editor::addBrush()
+void Editor::addBrush(BrushShape shape)
 {
     glm::vec3 point = m_host.spawnPoint();
 
     LevelBrush brush;
-    brush.name = std::string(BRUSH_SHAPE_NAMES[static_cast<int>(m_newBrush.shape)]) + " " + std::to_string(m_nextBrush++);
     brush.def = m_newBrush;
+    brush.def.shape = shape;
+    brush.name = std::string(BRUSH_SHAPE_NAMES[static_cast<int>(shape)]) + " " + std::to_string(m_nextBrush++);
     brush.position = glm::vec3(snapCenter(point.x, m_newBrush.size.x), 0.0f,
                                snapCenter(point.z, m_newBrush.size.z));
 
@@ -220,7 +221,10 @@ void Editor::trackHistory(bool overlayVisible)
 
 void Editor::flushHistory()
 {
-    m_history.observe(captureState());
+    if (m_history.observe(captureState()))
+    {
+        m_dirty = true;
+    }
     m_historyDirty = false;
 }
 
@@ -243,6 +247,7 @@ void Editor::restoreState(const LevelData& state)
 
     m_history.setCurrent(captureState());
     m_historyDirty = false;
+    m_dirty = true;
 }
 
 bool Editor::undo()
@@ -301,6 +306,22 @@ bool Editor::execute(EditorCommand command)
         return true;
     case EditorCommand::DrawTool:
         toggleDrawTool();
+        return true;
+    case EditorCommand::SelectTool:
+        m_tool.disarm();
+        return true;
+    case EditorCommand::Focus:
+        m_host.focusItem(-1);
+        return true;
+    case EditorCommand::Rename:
+        if (m_host.selectionCount() != 1)
+        {
+            return false;
+        }
+        m_focusName = true;
+        return true;
+    case EditorCommand::Delete:
+        m_host.deleteSelection();
         return true;
     case EditorCommand::ToggleGrid:
         m_showGrid = !m_showGrid;
@@ -369,9 +390,11 @@ void Editor::saveLevel()
     }
 
     std::string error;
+    flushHistory();
     if (saveLevelFile(levelPath(name), m_host.captureLevel(), error))
     {
         m_status = "Saved " + name;
+        m_dirty = false;
         refreshLevelList();
     }
     else
@@ -420,6 +443,8 @@ void Editor::loadLevel(const std::string& name)
     m_nextBrush = static_cast<int>(level.brushes.size()) + 1;
     m_nextLight = static_cast<int>(level.lights.size()) + 1;
     std::snprintf(m_levelName, sizeof(m_levelName), "%s", name.c_str());
+    flushHistory();
+    m_dirty = false;
     m_status = "Loaded " + name;
     if (failed > 0)
     {
@@ -427,313 +452,12 @@ void Editor::loadLevel(const std::string& name)
     }
 }
 
-void Editor::drawBrushSection()
+void Editor::newLevel()
 {
-    ImGui::DragFloat("Grid size", &m_gridSize, 0.05f, 0.05f, 10.0f, "%.2f");
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip("New brushes snap to this grid, size fields step by it");
-    }
-
-    int newShape = static_cast<int>(m_newBrush.shape);
-    if (ImGui::Combo("Shape", &newShape, BRUSH_SHAPE_NAMES, BRUSH_SHAPE_COUNT))
-    {
-        m_newBrush.shape = static_cast<BrushShape>(newShape);
-    }
-    if (m_newBrush.shape == BrushShape::Stairs)
-    {
-        ImGui::SliderInt("Steps", &m_newBrush.steps, 1, 32);
-    }
-    ImGui::DragFloat3("Size", &m_newBrush.size.x, 0.05f, 0.05f, 1000.0f, "%.2f");
-    ImGui::ColorEdit3("Color", &m_newBrush.color.x);
-    ImGui::SliderFloat("Roughness", &m_newBrush.roughness, 0.05f, 1.0f, "%.2f");
-    ImGui::SliderFloat("Metallic", &m_newBrush.metallic, 0.0f, 1.0f, "%.2f");
-    ImGui::TextDisabled("New brushes use the texture chosen here");
-    drawTextureControls(m_newBrush, "##new");
-
-    if (ImGui::Button("Add brush"))
-    {
-        addBrush();
-    }
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip("Create a brush where the camera is looking at the floor");
-    }
-
-    ImGui::SameLine();
-    if (ImGui::Button(m_tool.armed() ? "Stop drawing" : "Draw brushes"))
-    {
-        toggleDrawTool();
-    }
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip("Drag a footprint, release, move the mouse for height, click to confirm. Ramps and stairs rise toward the drag direction (B)");
-    }
-    if (m_tool.armed())
-    {
-        ImGui::TextDisabled("Drag a footprint, release, move the mouse for height, click. Esc to stop.");
-    }
-
-    ImGui::Checkbox("Show grid", &m_showGrid);
-    ImGui::SameLine();
-    ImGui::Checkbox("Show selection outline", &m_showSelection);
-}
-
-void Editor::drawSelectedBrushSection()
-{
-    int count = m_host.selectionCount();
-    if (count == 0)
-    {
-        ImGui::TextDisabled("Click a block or light to select it, Shift-click to add more");
-        return;
-    }
-
-    BrushDef* brush = count == 1 ? m_host.selectedBrush() : nullptr;
-    LightDef* light = count == 1 ? m_host.selectedLight() : nullptr;
-    if (brush)
-    {
-        drawBrushProperties(*brush);
-    }
-    else if (light)
-    {
-        drawLightProperties(*light);
-    }
-    else if (count > 1)
-    {
-        ImGui::Text("%d items selected", count);
-    }
-
-    if (ImGui::Button("Snap to grid"))
-    {
-        m_host.snapSelectedToGrid(m_gridSize);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Rotate 90"))
-    {
-        m_host.rotateSelected(90.0f);
-    }
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip("Turn the selection a quarter turn (R), which also changes which way a ramp or stairs rises");
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Duplicate"))
-    {
-        m_host.duplicateSelected(glm::vec3(m_gridSize, 0.0f, m_gridSize));
-    }
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip("Copy the selection, offset by one grid step (Cmd/Ctrl+D)");
-    }
-}
-
-void Editor::drawBrushProperties(BrushDef& brush)
-{
-    bool changed = false;
-    int shape = static_cast<int>(brush.shape);
-    if (ImGui::Combo("Shape##selected", &shape, BRUSH_SHAPE_NAMES, BRUSH_SHAPE_COUNT))
-    {
-        brush.shape = static_cast<BrushShape>(shape);
-        changed = true;
-    }
-    if (brush.shape == BrushShape::Stairs)
-    {
-        changed |= ImGui::SliderInt("Steps##selected", &brush.steps, 1, 32);
-    }
-    changed |= ImGui::DragFloat3("Size##selected", &brush.size.x, 0.05f, 0.05f, 1000.0f, "%.2f");
-    changed |= ImGui::ColorEdit3("Color##selected", &brush.color.x);
-    changed |= ImGui::SliderFloat("Roughness##selected", &brush.roughness, 0.05f, 1.0f, "%.2f");
-    changed |= ImGui::SliderFloat("Metallic##selected", &brush.metallic, 0.0f, 1.0f, "%.2f");
-    changed |= drawTextureControls(brush, "##selected");
-
-    if (changed)
-    {
-        m_host.applySelectedBrush();
-    }
-}
-
-bool Editor::drawTextureControls(BrushDef& brush, const char* suffix)
-{
-    bool changed = false;
-
-    ImGui::Separator();
-    ImGui::Text("Texture: %s", brush.texture.empty() ? "None (plain color)" : brush.texture.c_str());
-    ImGui::TextDisabled("Click a name below to apply it");
-
-    std::vector<std::string> options;
-    options.push_back("None");
-    options.insert(options.end(), m_textureNames.begin(), m_textureNames.end());
-
-    float available = ImGui::GetContentRegionAvail().x;
-    float used = 0.0f;
-    const ImGuiStyle& style = ImGui::GetStyle();
-
-    for (size_t i = 0; i < options.size(); i++)
-    {
-        const std::string& name = options[i];
-        bool none = i == 0;
-        bool active = none ? brush.texture.empty() : brush.texture == name;
-
-        float width = ImGui::CalcTextSize(name.c_str()).x + style.FramePadding.x * 2.0f;
-        if (i > 0)
-        {
-            if (used + style.ItemSpacing.x + width <= available)
-            {
-                ImGui::SameLine();
-                used += style.ItemSpacing.x;
-            }
-            else
-            {
-                used = 0.0f;
-            }
-        }
-        used += width;
-
-        if (active)
-        {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.12f, 0.12f, 1.0f));
-        }
-        std::string id = name + suffix;
-        if (ImGui::Button(id.c_str()))
-        {
-            brush.texture = none ? std::string() : name;
-            changed = true;
-        }
-        if (active)
-        {
-            ImGui::PopStyleColor();
-        }
-    }
-
-    if (!brush.texture.empty())
-    {
-        std::string tileLabel = std::string("Tile size") + suffix;
-        changed |= ImGui::DragFloat(tileLabel.c_str(), &brush.textureScale, 0.05f, 0.1f, 100.0f, "%.2f m");
-        if (ImGui::IsItemHovered())
-        {
-            ImGui::SetTooltip("World-space length of one texture repeat, so the pattern keeps its scale when a brush is resized");
-        }
-    }
-    ImGui::Separator();
-    return changed;
-}
-
-void Editor::drawLightProperties(LightDef& light)
-{
-    ImGui::Checkbox("Enabled##light", &light.enabled);
-    ImGui::ColorEdit3("Color##light", &light.color.x);
-    ImGui::DragFloat("Intensity##light", &light.intensity, 0.25f, 0.0f, 1000.0f, "%.1f");
-    ImGui::DragFloat("Radius##light", &light.radius, 0.1f, 0.5f, 200.0f, "%.1f m");
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip("Distance at which the light fades to nothing");
-    }
-}
-
-void Editor::drawLightSection()
-{
-    if (ImGui::Button("Add light"))
-    {
-        addLight();
-    }
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip("Place a point light 2.5 m above where the camera is looking (L). Drag it to move, edit its height in the Scene tab");
-    }
-
-    ImGui::SameLine();
-    if (ImGui::Checkbox("Show markers", &m_showLightMarkers))
-    {
-        m_host.setLightMarkersVisible(m_showLightMarkers);
-    }
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip("Hide the light gizmos to preview the level. Lights keep shining");
-    }
-    ImGui::TextDisabled("The 16 lights nearest the camera are rendered. Point lights do not cast shadows");
-}
-
-void Editor::drawLevelSection()
-{
-    if (ImGui::Button("Undo"))
-    {
-        undo();
-    }
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip("Cmd/Ctrl+Z");
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Redo"))
-    {
-        redo();
-    }
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip("Cmd/Ctrl+Shift+Z");
-    }
-    ImGui::SameLine();
-    ImGui::TextDisabled("%d undo / %d redo", static_cast<int>(m_history.undoCount()), static_cast<int>(m_history.redoCount()));
-
-    ImGui::InputText("Name", m_levelName, sizeof(m_levelName));
-
-    if (ImGui::Button("Save level"))
-    {
-        saveLevel();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("New level"))
-    {
-        m_host.clearLevel();
-        m_nextBrush = 1;
-        m_nextLight = 1;
-        m_status = "Cleared the scene";
-    }
-    ImGui::SameLine();
-    if (ImGui::SmallButton("Refresh"))
-    {
-        refreshLevelList();
-        refreshTextureList();
-    }
-
-    if (m_levelFiles.empty())
-    {
-        ImGui::TextDisabled("No saved levels in assets/levels");
-    }
-    for (size_t i = 0; i < m_levelFiles.size(); i++)
-    {
-        ImGui::PushID(static_cast<int>(i));
-        ImGui::Text("%s", m_levelFiles[i].c_str());
-        ImGui::SameLine();
-        if (ImGui::Button("Load"))
-        {
-            loadLevel(m_levelFiles[i]);
-        }
-        ImGui::PopID();
-    }
-
-    if (!m_status.empty())
-    {
-        ImGui::TextDisabled("%s", m_status.c_str());
-    }
-}
-
-void Editor::drawPanel()
-{
-    if (ImGui::CollapsingHeader("Brushes", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        drawBrushSection();
-    }
-    if (ImGui::CollapsingHeader("Lights", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        drawLightSection();
-    }
-    if (ImGui::CollapsingHeader("Selection", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        drawSelectedBrushSection();
-    }
-    if (ImGui::CollapsingHeader("Level", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        drawLevelSection();
-    }
+    m_host.clearLevel();
+    m_nextBrush = 1;
+    m_nextLight = 1;
+    flushHistory();
+    m_dirty = false;
+    m_status = "Cleared the scene";
 }

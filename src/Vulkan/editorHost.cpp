@@ -123,6 +123,155 @@ public:
         m_engine.clearSelection();
     }
 
+    void listItems(std::vector<ItemInfo>& items) const override
+    {
+        items.clear();
+        items.reserve(m_engine.M_MODELS.size());
+        for (size_t i = 0; i < m_engine.M_MODELS.size(); i++)
+        {
+            const Model& model = *m_engine.M_MODELS[i];
+            if (model.ghost || model.isGround || !model.asset)
+            {
+                continue;
+            }
+            items.emplace_back();
+            fillItem(items.back(), model, static_cast<int>(i));
+        }
+    }
+
+    bool primaryItem(ItemInfo& info) const override
+    {
+        if (m_engine.m_selection.size() != 1 || !m_engine.m_selected)
+        {
+            return false;
+        }
+        for (size_t i = 0; i < m_engine.M_MODELS.size(); i++)
+        {
+            if (m_engine.M_MODELS[i].get() == m_engine.m_selected)
+            {
+                fillItem(info, *m_engine.M_MODELS[i], static_cast<int>(i));
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void selectItem(int id, bool additive) override
+    {
+        Model* model = modelAt(id);
+        if (!model)
+        {
+            return;
+        }
+        if (additive)
+        {
+            m_engine.toggleSelection(model);
+        }
+        else
+        {
+            m_engine.selectOnly(model);
+        }
+    }
+
+    void setItemHidden(int id, bool hidden) override
+    {
+        Model* model = modelAt(id);
+        if (!model)
+        {
+            return;
+        }
+        model->hidden = hidden;
+        refreshVisibility(*model);
+        m_engine.m_shadowDirty = true;
+    }
+
+    void setItemLocked(int id, bool locked) override
+    {
+        Model* model = modelAt(id);
+        if (model)
+        {
+            model->locked = locked;
+        }
+    }
+
+    void renameItem(int id, const std::string& name) override
+    {
+        Model* model = modelAt(id);
+        if (model && !name.empty())
+        {
+            model->name = name;
+        }
+    }
+
+    void setPrimaryTransform(const glm::vec3& position, float yawDegrees, float scale) override
+    {
+        Model* model = m_engine.m_selected;
+        if (!model || m_engine.m_selection.size() != 1 || model->locked)
+        {
+            return;
+        }
+        model->position = position;
+        model->yawDegrees = yawDegrees;
+        if (!model->brush && !model->light)
+        {
+            model->scale = std::max(scale, 0.001f);
+        }
+        m_engine.updateModelTransform(*model);
+        m_engine.deferShadowUpdate();
+    }
+
+    void focusItem(int id) override
+    {
+        glm::vec3 lo(std::numeric_limits<float>::max());
+        glm::vec3 hi(std::numeric_limits<float>::lowest());
+        bool any = false;
+
+        auto grow = [&](const Model* model)
+        {
+            if (!model || model->ghost || !model->asset)
+            {
+                return;
+            }
+            lo = glm::min(lo, model->worldMin);
+            hi = glm::max(hi, model->worldMax);
+            any = true;
+        };
+
+        if (id >= 0)
+        {
+            grow(modelAt(id));
+        }
+        else
+        {
+            for (const Model* model : m_engine.m_selection)
+            {
+                grow(model);
+            }
+        }
+        if (!any)
+        {
+            return;
+        }
+
+        glm::vec3 center = (lo + hi) * 0.5f;
+        float radius = std::max(0.5f * glm::length(hi - lo), 0.5f);
+        float aspect = m_engine.M_SWAPCHAINEXTENT.width / static_cast<float>(std::max(m_engine.M_SWAPCHAINEXTENT.height, 1u));
+        float halfVertical = glm::radians(m_engine.m_fov) * 0.5f;
+        float halfHorizontal = std::atan(std::tan(halfVertical) * aspect);
+        float distance = radius / std::sin(std::min(halfVertical, halfHorizontal)) * 1.3f;
+        m_engine.m_camera.position = center - m_engine.m_camera.front() * distance;
+    }
+
+    void frameAll() override
+    {
+        m_engine.frameScene();
+    }
+
+    void deleteSelection() override
+    {
+        m_engine.deleteSelected();
+    }
+
     void selectAll() override
     {
         m_engine.clearSelection();
@@ -318,7 +467,7 @@ public:
     bool selectedBrushFrame(glm::vec3& position, float& yawDegrees, glm::vec3& size) override
     {
         Model* model = m_engine.m_selected;
-        if (m_engine.m_selection.size() != 1 || !model || model->ghost || !model->visible || !model->brush)
+        if (m_engine.m_selection.size() != 1 || !model || model->ghost || !model->visible || !model->brush || model->locked)
         {
             return false;
         }
@@ -394,6 +543,8 @@ public:
                 light.def = *model->light;
                 light.position = model->position;
                 light.selected = m_engine.isSelected(model.get());
+                light.hidden = model->hidden;
+                light.locked = model->locked;
                 level.lights.push_back(light);
             }
             else if (model->brush)
@@ -405,6 +556,8 @@ public:
                 brush.position = model->position;
                 brush.yawDegrees = model->yawDegrees;
                 brush.selected = m_engine.isSelected(model.get());
+                brush.hidden = model->hidden;
+                brush.locked = model->locked;
                 level.brushes.push_back(brush);
             }
             else
@@ -416,6 +569,8 @@ public:
                 entry.yawDegrees = model->yawDegrees;
                 entry.scale = model->scale;
                 entry.selected = m_engine.isSelected(model.get());
+                entry.hidden = model->hidden;
+                entry.locked = model->locked;
                 level.models.push_back(entry);
             }
         }
@@ -467,6 +622,9 @@ public:
             model->brush = brush.def;
             model->position = brush.position;
             model->yawDegrees = brush.yawDegrees;
+            model->hidden = brush.hidden;
+            model->locked = brush.locked;
+            refreshVisibility(*model);
             m_engine.updateModelTransform(*model);
             m_engine.m_shadowDirty = true;
             if (select)
@@ -517,6 +675,9 @@ public:
         model->position = entry.position;
         model->yawDegrees = entry.yawDegrees;
         model->scale = entry.scale;
+        model->hidden = entry.hidden;
+        model->locked = entry.locked;
+        refreshVisibility(*model);
         m_engine.updateModelTransform(*model);
         m_engine.m_shadowDirty = true;
         if (entry.selected)
@@ -539,7 +700,9 @@ public:
             model->name = light.name;
             model->light = light.def;
             model->position = light.position;
-            model->visible = m_engine.m_showLightMarkers;
+            model->hidden = light.hidden;
+            model->locked = light.locked;
+            refreshVisibility(*model);
             m_engine.updateModelTransform(*model);
             if (select)
             {
@@ -572,7 +735,7 @@ public:
         {
             if (model->light)
             {
-                model->visible = visible;
+                refreshVisibility(*model);
             }
         }
         if (!visible)
@@ -764,6 +927,10 @@ public:
 
         for (Model* model : m_engine.m_selection)
         {
+            if (model->locked)
+            {
+                continue;
+            }
             glm::vec3 half(0.0f);
             if (model->brush)
             {
@@ -779,6 +946,54 @@ public:
     }
 
 private:
+    Model* modelAt(int id) const
+    {
+        if (id < 0 || id >= static_cast<int>(m_engine.M_MODELS.size()))
+        {
+            return nullptr;
+        }
+        Model* model = m_engine.M_MODELS[static_cast<size_t>(id)].get();
+        return model->ghost ? nullptr : model;
+    }
+
+    void refreshVisibility(Model& model) const
+    {
+        model.visible = !model.hidden && !(model.light && !m_engine.m_showLightMarkers);
+    }
+
+    void fillItem(ItemInfo& info, const Model& model, int id) const
+    {
+        info.id = id;
+        info.name = model.name;
+        info.visible = !model.hidden;
+        info.locked = model.locked;
+        info.selected = m_engine.isSelected(&model);
+        info.position = model.position;
+        info.yawDegrees = model.yawDegrees;
+        info.scale = model.scale;
+        info.nativeSize = model.asset ? model.asset->localMax - model.asset->localMin : glm::vec3(0.0f);
+
+        if (model.light)
+        {
+            info.kind = ItemKind::Light;
+        }
+        else if (model.brush)
+        {
+            info.nativeSize = model.brush->size * model.scale;
+            switch (model.brush->shape)
+            {
+                case BrushShape::Box: info.kind = ItemKind::Box; break;
+                case BrushShape::Ramp: info.kind = ItemKind::Ramp; break;
+                case BrushShape::Stairs: info.kind = ItemKind::Stairs; break;
+            }
+        }
+        else
+        {
+            info.kind = ItemKind::Model;
+            info.nativeSize *= model.scale;
+        }
+    }
+
     const MeshData& unitMesh(const BrushDef& def) const
     {
         int steps = def.shape == BrushShape::Stairs ? def.steps : 0;
@@ -963,6 +1178,12 @@ bool BlackGlass::handleEditorKey(int key, int mods, bool repeat)
         return m_editor->execute(EditorCommand::Rotate);
     case GLFW_KEY_L:
         return m_editor->execute(EditorCommand::AddLight);
+    case GLFW_KEY_V:
+        return m_editor->execute(EditorCommand::SelectTool);
+    case GLFW_KEY_F:
+        return m_editor->execute(EditorCommand::Focus);
+    case GLFW_KEY_F2:
+        return m_editor->execute(EditorCommand::Rename);
     default:
         return false;
     }

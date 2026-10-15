@@ -50,6 +50,14 @@ bool saveLevelFile(const std::string& path, const LevelData& level, std::string&
         }
         entry["position"] = toJson(brush.position);
         entry["yaw"] = brush.yawDegrees;
+        if (brush.hidden)
+        {
+            entry["hidden"] = true;
+        }
+        if (brush.locked)
+        {
+            entry["locked"] = true;
+        }
         brushes.push_back(entry);
     }
     root["brushes"] = brushes;
@@ -63,6 +71,14 @@ bool saveLevelFile(const std::string& path, const LevelData& level, std::string&
         entry["position"] = toJson(model.position);
         entry["yaw"] = model.yawDegrees;
         entry["scale"] = model.scale;
+        if (model.hidden)
+        {
+            entry["hidden"] = true;
+        }
+        if (model.locked)
+        {
+            entry["locked"] = true;
+        }
         models.push_back(entry);
     }
     root["models"] = models;
@@ -77,6 +93,14 @@ bool saveLevelFile(const std::string& path, const LevelData& level, std::string&
         entry["intensity"] = light.def.intensity;
         entry["radius"] = light.def.radius;
         entry["enabled"] = light.def.enabled;
+        if (light.hidden)
+        {
+            entry["hidden"] = true;
+        }
+        if (light.locked)
+        {
+            entry["locked"] = true;
+        }
         lights.push_back(entry);
     }
     root["lights"] = lights;
@@ -175,6 +199,8 @@ bool loadLevelFile(const std::string& path, LevelData& level, std::string& error
                 brush.def.textureScale = std::clamp(entry.value("textureScale", brush.def.textureScale), 0.1f, 100.0f);
                 brush.position = toVec3(entry.value("position", Json()), glm::vec3(0.0f));
                 brush.yawDegrees = entry.value("yaw", 0.0f);
+                brush.hidden = entry.value("hidden", false);
+                brush.locked = entry.value("locked", false);
                 loaded.brushes.push_back(brush);
             }
         }
@@ -189,6 +215,8 @@ bool loadLevelFile(const std::string& path, LevelData& level, std::string& error
                 model.position = toVec3(entry.value("position", Json()), glm::vec3(0.0f));
                 model.yawDegrees = entry.value("yaw", 0.0f);
                 model.scale = entry.value("scale", 1.0f);
+                model.hidden = entry.value("hidden", false);
+                model.locked = entry.value("locked", false);
                 if (!model.asset.empty())
                 {
                     loaded.models.push_back(model);
@@ -207,6 +235,8 @@ bool loadLevelFile(const std::string& path, LevelData& level, std::string& error
                 light.def.intensity = entry.value("intensity", light.def.intensity);
                 light.def.radius = entry.value("radius", light.def.radius);
                 light.def.enabled = entry.value("enabled", light.def.enabled);
+                light.hidden = entry.value("hidden", false);
+                light.locked = entry.value("locked", false);
                 loaded.lights.push_back(light);
             }
         }
