@@ -414,6 +414,16 @@ void BlackGlass::drawQuitPrompt()
     }
 }
 
+void BlackGlass::applySunDirection()
+{
+    float azimuth = glm::radians(m_settings.sunAzimuth);
+    float elevation = glm::radians(m_settings.sunElevation);
+    M_LIGHTDIR = glm::vec3(std::cos(elevation) * std::cos(azimuth),
+                           std::sin(elevation),
+                           std::cos(elevation) * std::sin(azimuth));
+    m_shadowDirty = true;
+}
+
 void BlackGlass::buildUi()
 {
     if (!m_showUi)
@@ -437,12 +447,7 @@ void BlackGlass::buildUi()
 
     auto applySun = [&]()
     {
-        float azimuth = glm::radians(m_settings.sunAzimuth);
-        float elevation = glm::radians(m_settings.sunElevation);
-        M_LIGHTDIR = glm::vec3(std::cos(elevation) * std::cos(azimuth),
-                               std::sin(elevation),
-                               std::cos(elevation) * std::sin(azimuth));
-        m_shadowDirty = true;
+        applySunDirection();
     };
 
     ImGui::SetNextWindowPos(ImVec2(12.0f, 12.0f), ImGuiCond_FirstUseEver);
@@ -627,6 +632,10 @@ void BlackGlass::buildUi()
                         tip("Uniform scale applied on top of the model's native size");
 
                         glm::vec3 size = model.asset->localMax - model.asset->localMin;
+                        if (model.brush)
+                        {
+                            size *= model.brush->size;
+                        }
                         float longest = std::max(size.x, std::max(size.y, size.z));
                         ImGui::TextDisabled("Native size  %.2f x %.2f x %.2f", size.x, size.y, size.z);
 

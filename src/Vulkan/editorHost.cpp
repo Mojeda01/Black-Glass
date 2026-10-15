@@ -1,10 +1,20 @@
 #include "../BlackGlass.h"
+#include "../Editor/BrushMesh.h"
 #include "../Editor/Editor.h"
 #include "../Editor/EditorHost.h"
 
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <iostream>
+
+namespace
+{
+    bool sameMaterial(const BrushDef& a, const BrushDef& b)
+    {
+        return a.color == b.color && a.roughness == b.roughness && a.metallic == b.metallic;
+    }
+}
 
 class BlackGlassEditorHost : public EditorHost
 {
@@ -56,11 +66,11 @@ public:
                 continue;
             }
 
-            if (model->asset->brush)
+            if (model->brush)
             {
                 LevelBrush brush;
                 brush.name = model->name;
-                brush.def = *model->asset->brush;
+                brush.def = *model->brush;
                 brush.def.size *= model->scale;
                 brush.position = model->position;
                 brush.yawDegrees = model->yawDegrees;
@@ -77,7 +87,30 @@ public:
                 level.models.push_back(entry);
             }
         }
+
+        level.hasSettings = true;
+        level.settings = m_engine.m_settings;
+        level.hasCamera = true;
+        level.camera.position = m_engine.m_camera.position;
+        level.camera.yaw = m_engine.m_camera.yaw;
+        level.camera.pitch = m_engine.m_camera.pitch;
         return level;
+    }
+
+    void applyEnvironment(const LevelData& level) override
+    {
+        if (level.hasSettings)
+        {
+            m_engine.m_settings = level.settings;
+            m_engine.applySunDirection();
+        }
+        if (level.hasCamera)
+        {
+            m_engine.m_camera.position = level.camera.position;
+            m_engine.m_camera.yaw = level.camera.yaw;
+            m_engine.m_camera.pitch = level.camera.pitch;
+        }
+        m_engine.m_shadowDirty = true;
     }
 
     void clearLevel() override
@@ -88,20 +121,18 @@ public:
         }
     }
 
-    bool spawnBrush(const LevelBrush& brush, const MeshData& mesh, bool select) override
+    bool spawnBrush(const LevelBrush& brush, bool select) override
     {
         try
         {
-            MeshData copy = mesh;
-            int index = m_engine.registerAsset(copy, brush.name, std::string());
-            m_engine.M_LIBRARY[index]->brush = std::make_shared<BrushDef>(brush.def);
-
+            int index = acquireBrushAsset(brush.def);
             Model* model = m_engine.addInstance(index, false);
             if (!model)
             {
                 return false;
             }
             model->name = brush.name;
+            model->brush = brush.def;
             model->position = brush.position;
             model->yawDegrees = brush.yawDegrees;
             m_engine.updateModelTransform(*model);
@@ -162,31 +193,103 @@ public:
     BrushDef* selectedBrush() override
     {
         Model* model = m_engine.m_selected;
-        if (model && !model->ghost && model->asset && model->asset->brush)
+        if (model && !model->ghost && model->brush)
         {
-            return model->asset->brush.get();
+            return &*model->brush;
         }
         return nullptr;
     }
 
-    void applySelectedBrush(const MeshData& mesh) override
+    void applySelectedBrush() override
     {
         Model* model = m_engine.m_selected;
-        if (!model || !model->asset)
+        if (!model || !model->brush || !model->asset || !model->asset->brush)
         {
             return;
         }
 
         try
         {
-            MeshData copy = mesh;
-            m_engine.replaceAssetMesh(*model->asset, copy);
+            const BrushDef& def = *model->brush;
+            if (!sameMaterial(*model->asset->brush, def))
+            {
+                int users = 0;
+                for (const auto& other : m_engine.M_MODELS)
+                {
+                    if (other->asset == model->asset)
+                    {
+                        users++;
+                    }
+                }
+
+                if (users == 1)
+                {
+                    updateAssetMaterial(*model->asset, def);
+                }
+                else
+                {
+                    int index = acquireBrushAsset(def);
+                    model->asset = m_engine.M_LIBRARY[index];
+                    m_engine.m_brushPurgePending = true;
+                }
+            }
+
+            m_engine.updateModelTransform(*model);
+            m_engine.m_shadowDirty = true;
         }
         catch (const std::exception& e)
         {
             m_engine.m_loadError = e.what();
             std::cerr << "  [editor] Brush update failed - " << e.what() << "\n";
         }
+    }
+
+    bool duplicateSelected(const glm::vec3& offset) override
+    {
+        Model* source = m_engine.m_selected;
+        if (!source || source->ghost || !source->asset)
+        {
+            return false;
+        }
+
+        if (source->brush)
+        {
+            LevelBrush copy;
+            copy.name = source->name + " copy";
+            copy.def = *source->brush;
+            copy.def.size *= source->scale;
+            copy.position = source->position + offset;
+            copy.yawDegrees = source->yawDegrees;
+            return spawnBrush(copy, true);
+        }
+
+        int index = -1;
+        for (size_t i = 0; i < m_engine.M_LIBRARY.size(); i++)
+        {
+            if (m_engine.M_LIBRARY[i] == source->asset)
+            {
+                index = static_cast<int>(i);
+                break;
+            }
+        }
+        if (index < 0)
+        {
+            return false;
+        }
+
+        Model* model = m_engine.addInstance(index, false);
+        if (!model)
+        {
+            return false;
+        }
+        model->name = source->name + " copy";
+        model->position = source->position + offset;
+        model->yawDegrees = source->yawDegrees;
+        model->scale = source->scale;
+        m_engine.updateModelTransform(*model);
+        m_engine.m_shadowDirty = true;
+        m_engine.m_selected = model;
+        return true;
     }
 
     void snapSelectedToGrid(float grid) override
@@ -198,9 +301,9 @@ public:
         }
 
         glm::vec3 half(0.0f);
-        if (model->asset && model->asset->brush)
+        if (model->brush)
         {
-            half = model->asset->brush->size * 0.5f;
+            half = model->brush->size * model->scale * 0.5f;
         }
 
         model->position.x = std::round((model->position.x - half.x) / grid) * grid + half.x;
@@ -211,6 +314,43 @@ public:
     }
 
 private:
+    int acquireBrushAsset(const BrushDef& def)
+    {
+        for (size_t i = 0; i < m_engine.M_LIBRARY.size(); i++)
+        {
+            const auto& asset = m_engine.M_LIBRARY[i];
+            if (asset->brush && sameMaterial(*asset->brush, def))
+            {
+                return static_cast<int>(i);
+            }
+        }
+
+        BrushDef unit = def;
+        unit.size = glm::vec3(1.0f);
+        MeshData mesh = buildBrushMesh(unit);
+        int index = m_engine.registerAsset(mesh, "Brush material", std::string());
+        m_engine.M_LIBRARY[index]->brush = std::make_shared<BrushDef>(unit);
+        return index;
+    }
+
+    void updateAssetMaterial(ModelAsset& asset, const BrushDef& def)
+    {
+        if (asset.materials.empty() || !asset.materialBuffer.mapped)
+        {
+            return;
+        }
+
+        MaterialParams& params = asset.materials[0].params;
+        params.baseColorFactor = glm::vec4(def.color, 1.0f);
+        params.factors.x = def.metallic;
+        params.factors.y = def.roughness;
+        std::memcpy(asset.materialBuffer.mapped, &params, sizeof(MaterialParams));
+
+        BrushDef unit = def;
+        unit.size = glm::vec3(1.0f);
+        *asset.brush = unit;
+    }
+
     BlackGlass& m_engine;
 };
 

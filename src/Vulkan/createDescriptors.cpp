@@ -168,7 +168,8 @@ void BlackGlass::updateUniformBuffer(uint32_t currentImage)
 
     ubo.proj[1][1] *= -1;
 
-    ubo.invViewProj = glm::inverse(ubo.proj * ubo.view);
+    m_viewProj = ubo.proj * ubo.view;
+    ubo.invViewProj = glm::inverse(m_viewProj);
 
     ubo.lightViewProj = M_LIGHTVIEWPROJ;
     ubo.lightDir = glm::vec4(glm::normalize(M_LIGHTDIR), m_settings.sunIntensity);

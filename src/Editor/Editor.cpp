@@ -1,5 +1,4 @@
 #include "Editor.h"
-#include "BrushMesh.h"
 #include "LevelIO.h"
 
 #include "../imgui/imgui.h"
@@ -54,7 +53,7 @@ void Editor::addBrush()
     brush.position = glm::vec3(snapCenter(point.x, m_newBrush.size.x), 0.0f,
                                snapCenter(point.z, m_newBrush.size.z));
 
-    if (!m_host.spawnBrush(brush, buildBrushMesh(brush.def), true))
+    if (!m_host.spawnBrush(brush, true))
     {
         m_status = "Could not create the brush";
     }
@@ -103,11 +102,13 @@ void Editor::loadLevel(const std::string& name)
     }
     for (const LevelBrush& brush : level.brushes)
     {
-        if (!m_host.spawnBrush(brush, buildBrushMesh(brush.def), false))
+        if (!m_host.spawnBrush(brush, false))
         {
             failed++;
         }
     }
+
+    m_host.applyEnvironment(level);
 
     m_nextBrush = static_cast<int>(level.brushes.size()) + 1;
     std::snprintf(m_levelName, sizeof(m_levelName), "%s", name.c_str());
@@ -158,12 +159,21 @@ void Editor::drawSelectedBrushSection()
 
     if (changed)
     {
-        m_host.applySelectedBrush(buildBrushMesh(*brush));
+        m_host.applySelectedBrush();
     }
 
     if (ImGui::Button("Snap to grid"))
     {
         m_host.snapSelectedToGrid(m_gridSize);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Duplicate"))
+    {
+        m_host.duplicateSelected(glm::vec3(m_gridSize, 0.0f, m_gridSize));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Copy the selected brush, offset by one grid step");
     }
 }
 

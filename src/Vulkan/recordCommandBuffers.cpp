@@ -77,6 +77,37 @@ void barrierRange(
     vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
 }
 
+struct Frustum
+{
+    glm::vec4 planes[6];
+
+    explicit Frustum(const glm::mat4& m)
+    {
+        auto row = [&](int i) { return glm::vec4(m[0][i], m[1][i], m[2][i], m[3][i]); };
+        planes[0] = row(3) + row(0);
+        planes[1] = row(3) - row(0);
+        planes[2] = row(3) + row(1);
+        planes[3] = row(3) - row(1);
+        planes[4] = row(2);
+        planes[5] = row(3) - row(2);
+    }
+
+    bool intersects(const glm::vec3& lo, const glm::vec3& hi) const
+    {
+        for (const glm::vec4& plane : planes)
+        {
+            glm::vec3 corner(plane.x >= 0.0f ? hi.x : lo.x,
+                             plane.y >= 0.0f ? hi.y : lo.y,
+                             plane.z >= 0.0f ? hi.z : lo.z);
+            if (glm::dot(glm::vec3(plane), corner) + plane.w < 0.0f)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+};
+
 }   // namespace
 
 void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -119,8 +150,19 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
         drawModels.push_back(M_GROUND.get());
     }
 
-    std::vector<TransparentItem> transparentOrder;
+    const Frustum frustum(m_viewProj);
+    std::vector<const Model*> viewModels;
+    viewModels.reserve(drawModels.size());
     for (const Model* model : drawModels)
+    {
+        if (model->isGround || frustum.intersects(model->worldMin, model->worldMax))
+        {
+            viewModels.push_back(model);
+        }
+    }
+
+    std::vector<TransparentItem> transparentOrder;
+    for (const Model* model : viewModels)
     {
         for (const Primitive& prim : model->asset->primitives)
         {
@@ -355,7 +397,7 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
         M_PUSHDESCRIPTORFN(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, M_PIPELINELAYOUT, 0, 1, &frameWrite);
 
         const Model* prepassBound = nullptr;
-        for (const Model* model : drawModels)
+        for (const Model* model : viewModels)
         {
             for (const Primitive& prim : model->asset->primitives)
             {
@@ -657,7 +699,7 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
     scissor.extent = M_SWAPCHAINEXTENT;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    for (const Model* model : drawModels)
+    for (const Model* model : viewModels)
     {
         for (const Primitive& prim : model->asset->primitives)
         {

@@ -2,6 +2,7 @@
 
 #include "../json.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 
@@ -59,6 +60,37 @@ bool saveLevelFile(const std::string& path, const LevelData& level, std::string&
         models.push_back(entry);
     }
     root["models"] = models;
+
+    if (level.hasSettings)
+    {
+        const RenderSettings& s = level.settings;
+        Json settings;
+        settings["sunIntensity"] = s.sunIntensity;
+        settings["sunAzimuth"] = s.sunAzimuth;
+        settings["sunElevation"] = s.sunElevation;
+        settings["envIntensity"] = s.envIntensity;
+        settings["shadows"] = s.shadows;
+        settings["exposure"] = s.exposure;
+        settings["bloom"] = s.bloom;
+        settings["bloomStrength"] = s.bloomStrength;
+        settings["tonemapper"] = s.tonemapper;
+        settings["ssao"] = s.ssao;
+        settings["ssaoRadius"] = s.ssaoRadius;
+        settings["ssaoIntensity"] = s.ssaoIntensity;
+        settings["reflections"] = s.reflections;
+        settings["reflectionStrength"] = s.reflectionStrength;
+        settings["floorRoughness"] = s.floorRoughness;
+        root["settings"] = settings;
+    }
+
+    if (level.hasCamera)
+    {
+        Json camera;
+        camera["position"] = toJson(level.camera.position);
+        camera["yaw"] = level.camera.yaw;
+        camera["pitch"] = level.camera.pitch;
+        root["camera"] = camera;
+    }
 
     std::error_code directoryError;
     std::filesystem::create_directories(std::filesystem::path(path).parent_path(), directoryError);
@@ -131,6 +163,37 @@ bool loadLevelFile(const std::string& path, LevelData& level, std::string& error
                     loaded.models.push_back(model);
                 }
             }
+        }
+
+        if (root.contains("settings") && root["settings"].is_object())
+        {
+            const Json& settings = root["settings"];
+            RenderSettings& s = loaded.settings;
+            s.sunIntensity = settings.value("sunIntensity", s.sunIntensity);
+            s.sunAzimuth = settings.value("sunAzimuth", s.sunAzimuth);
+            s.sunElevation = settings.value("sunElevation", s.sunElevation);
+            s.envIntensity = settings.value("envIntensity", s.envIntensity);
+            s.shadows = settings.value("shadows", s.shadows);
+            s.exposure = settings.value("exposure", s.exposure);
+            s.bloom = settings.value("bloom", s.bloom);
+            s.bloomStrength = settings.value("bloomStrength", s.bloomStrength);
+            s.tonemapper = std::clamp(settings.value("tonemapper", s.tonemapper), 0, TONEMAPPER_COUNT - 1);
+            s.ssao = settings.value("ssao", s.ssao);
+            s.ssaoRadius = settings.value("ssaoRadius", s.ssaoRadius);
+            s.ssaoIntensity = settings.value("ssaoIntensity", s.ssaoIntensity);
+            s.reflections = settings.value("reflections", s.reflections);
+            s.reflectionStrength = settings.value("reflectionStrength", s.reflectionStrength);
+            s.floorRoughness = settings.value("floorRoughness", s.floorRoughness);
+            loaded.hasSettings = true;
+        }
+
+        if (root.contains("camera") && root["camera"].is_object())
+        {
+            const Json& camera = root["camera"];
+            loaded.camera.position = toVec3(camera.value("position", Json()), loaded.camera.position);
+            loaded.camera.yaw = camera.value("yaw", loaded.camera.yaw);
+            loaded.camera.pitch = camera.value("pitch", loaded.camera.pitch);
+            loaded.hasCamera = true;
         }
 
         level = std::move(loaded);

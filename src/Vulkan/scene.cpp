@@ -101,9 +101,15 @@ void BlackGlass::updateModelTransform(Model& model)
                     localMin.y,
                     (localMin.z + localMax.z) * 0.5f);
 
+    glm::vec3 stretch(model.scale);
+    if (model.brush)
+    {
+        stretch *= model.brush->size;
+    }
+
     model.transform = glm::translate(glm::mat4(1.0f), model.position)
                     * glm::rotate(glm::mat4(1.0f), glm::radians(model.yawDegrees), glm::vec3(0.0f, 1.0f, 0.0f))
-                    * glm::scale(glm::mat4(1.0f), glm::vec3(model.scale))
+                    * glm::scale(glm::mat4(1.0f), stretch)
                     * glm::translate(glm::mat4(1.0f), -pivot);
 
     glm::vec3 lo(std::numeric_limits<float>::max());
@@ -135,6 +141,10 @@ void BlackGlass::placeNewModel(Model& model)
     }
 
     float width = (model.asset->localMax.x - model.asset->localMin.x) * model.scale;
+    if (model.brush)
+    {
+        width *= model.brush->size.x;
+    }
     float x = 0.0f;
     if (any)
     {

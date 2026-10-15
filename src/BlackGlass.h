@@ -76,6 +76,7 @@ struct Model
     float yawDegrees = 0.0f;
     float scale = 1.0f;
     glm::mat4 transform{ 1.0f };
+    std::optional<BrushDef> brush;
     glm::vec3 worldMin{ 0.0f };
     glm::vec3 worldMax{ 0.0f };
 };
@@ -279,6 +280,7 @@ private:
     VkPipelineLayout M_SHADOWPIPELINELAYOUT = VK_NULL_HANDLE;
     VkPipeline M_SHADOWPIPELINE = VK_NULL_HANDLE;
     glm::mat4 M_LIGHTVIEWPROJ{ 1.0f };
+    glm::mat4 m_viewProj{ 1.0f };
     glm::vec3 M_LIGHTDIR{ 0.5f, 1.0f, 0.3f };
     glm::vec3 M_SCENEMIN{ 0.0f };
     glm::vec3 M_SCENEMAX{ 0.0f };
@@ -400,6 +402,7 @@ private:
     int registerAsset(MeshData& mesh, const std::string& name, const std::string& path);
     void replaceAssetMesh(ModelAsset& asset, MeshData& mesh);
     void purgeUnusedBrushAssets();
+    void applySunDirection();
     void initEditor();
     void createTextureSampler();
     void transitionImageLayoutImmediate(VkImage image, VkImageLayout oldLayout,

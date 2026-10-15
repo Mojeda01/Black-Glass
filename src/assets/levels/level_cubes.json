@@ -1,0 +1,110 @@
+{
+  "brushes": [
+    {
+      "color": [
+        0.0,
+        0.501960813999176,
+        0.0
+      ],
+      "metallic": 0.0,
+      "name": "Brush 1",
+      "position": [
+        -0.9336507320404053,
+        0.0,
+        15.091819763183594
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "box",
+      "size": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.0,
+        0.0,
+        0.501960813999176
+      ],
+      "metallic": 0.0,
+      "name": "Brush 1 copy",
+      "position": [
+        2.66646671295166,
+        0.0,
+        15.441972732543945
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "box",
+      "size": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "metallic": 0.0,
+      "name": "Brush 1 copy",
+      "position": [
+        0.8549432754516602,
+        0.0,
+        11.534029960632324
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "box",
+      "size": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "yaw": 0.0
+    }
+  ],
+  "camera": {
+    "pitch": -23.500076293945313,
+    "position": [
+      6.986497402191162,
+      2.265373468399048,
+      14.459754943847656
+    ],
+    "yaw": -528.7996826171875
+  },
+  "models": [
+    {
+      "asset": "DamagedHelmet.glb",
+      "name": "DamagedHelmet",
+      "position": [
+        4.109158515930176,
+        0.0,
+        10.815117835998535
+      ],
+      "scale": 1.0,
+      "yaw": 0.0
+    }
+  ],
+  "settings": {
+    "bloom": true,
+    "bloomStrength": 0.03999999910593033,
+    "envIntensity": 1.0,
+    "exposure": 1.0,
+    "floorRoughness": 0.25,
+    "reflectionStrength": 1.0,
+    "reflections": true,
+    "shadows": true,
+    "ssao": true,
+    "ssaoIntensity": 1.0,
+    "ssaoRadius": 0.5,
+    "sunAzimuth": 30.96375846862793,
+    "sunElevation": 59.753746032714844,
+    "sunIntensity": 3.0,
+    "tonemapper": 0
+  },
+  "version": 1
+}
