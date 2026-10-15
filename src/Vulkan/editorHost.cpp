@@ -91,9 +91,18 @@ public:
         return !m_engine.m_mouseCaptured && !m_engine.uiWantsMouse();
     }
 
-    bool selectedBounds(glm::mat4& transform, glm::vec3& localMin, glm::vec3& localMax) const override
+    int selectionCount() const override
     {
-        const Model* model = m_engine.m_selected;
+        return static_cast<int>(m_engine.m_selection.size());
+    }
+
+    bool selectionBounds(int index, glm::mat4& transform, glm::vec3& localMin, glm::vec3& localMax) const override
+    {
+        if (index < 0 || index >= selectionCount())
+        {
+            return false;
+        }
+        const Model* model = m_engine.m_selection[static_cast<size_t>(index)];
         if (!model || model->ghost || !model->visible || !model->asset)
         {
             return false;
@@ -102,6 +111,23 @@ public:
         localMin = model->asset->localMin;
         localMax = model->asset->localMax;
         return true;
+    }
+
+    void clearSelection() override
+    {
+        m_engine.clearSelection();
+    }
+
+    void selectAll() override
+    {
+        m_engine.clearSelection();
+        for (const auto& model : m_engine.M_MODELS)
+        {
+            if (!model->ghost && !model->isGround && model->visible && model->asset)
+            {
+                m_engine.addToSelection(model.get());
+            }
+        }
     }
 
     void cancelPlacement() override
@@ -267,7 +293,7 @@ public:
             {
                 continue;
             }
-            if (excludeSelected && model.get() == m_engine.m_selected)
+            if (excludeSelected && m_engine.isSelected(model.get()))
             {
                 continue;
             }
@@ -283,7 +309,7 @@ public:
     bool selectedBrushFrame(glm::vec3& position, float& yawDegrees, glm::vec3& size) override
     {
         Model* model = m_engine.m_selected;
-        if (!model || model->ghost || !model->visible || !model->brush)
+        if (m_engine.m_selection.size() != 1 || !model || model->ghost || !model->visible || !model->brush)
         {
             return false;
         }
@@ -360,6 +386,7 @@ public:
                 brush.def.size *= model->scale;
                 brush.position = model->position;
                 brush.yawDegrees = model->yawDegrees;
+                brush.selected = m_engine.isSelected(model.get());
                 level.brushes.push_back(brush);
             }
             else
@@ -370,6 +397,7 @@ public:
                 entry.position = model->position;
                 entry.yawDegrees = model->yawDegrees;
                 entry.scale = model->scale;
+                entry.selected = m_engine.isSelected(model.get());
                 level.models.push_back(entry);
             }
         }
@@ -425,7 +453,7 @@ public:
             m_engine.m_shadowDirty = true;
             if (select)
             {
-                m_engine.m_selected = model;
+                m_engine.addToSelection(model);
             }
             return true;
         }
@@ -473,13 +501,17 @@ public:
         model->scale = entry.scale;
         m_engine.updateModelTransform(*model);
         m_engine.m_shadowDirty = true;
+        if (entry.selected)
+        {
+            m_engine.addToSelection(model);
+        }
         return true;
     }
 
     BrushDef* selectedBrush() override
     {
         Model* model = m_engine.m_selected;
-        if (model && !model->ghost && model->brush)
+        if (m_engine.m_selection.size() == 1 && model && !model->ghost && model->brush)
         {
             return &*model->brush;
         }
@@ -543,91 +575,95 @@ public:
 
     bool duplicateSelected(const glm::vec3& offset) override
     {
-        Model* source = m_engine.m_selected;
-        if (!source || source->ghost || !source->asset)
+        std::vector<Model*> sources = m_engine.m_selection;
+        if (sources.empty())
         {
             return false;
         }
 
-        if (source->brush)
-        {
-            LevelBrush copy;
-            copy.name = source->name + " copy";
-            copy.def = *source->brush;
-            copy.def.size *= source->scale;
-            copy.position = source->position + offset;
-            copy.yawDegrees = source->yawDegrees;
-            return spawnBrush(copy, true);
-        }
+        m_engine.clearSelection();
+        bool created = false;
 
-        int index = -1;
-        for (size_t i = 0; i < m_engine.M_LIBRARY.size(); i++)
+        for (Model* source : sources)
         {
-            if (m_engine.M_LIBRARY[i] == source->asset)
+            if (!source || source->ghost || !source->asset)
             {
-                index = static_cast<int>(i);
-                break;
+                continue;
             }
-        }
-        if (index < 0)
-        {
-            return false;
-        }
 
-        Model* model = m_engine.addInstance(index, false);
-        if (!model)
-        {
-            return false;
+            if (source->brush)
+            {
+                LevelBrush copy;
+                copy.name = source->name + " copy";
+                copy.def = *source->brush;
+                copy.def.size *= source->scale;
+                copy.position = source->position + offset;
+                copy.yawDegrees = source->yawDegrees;
+                created |= spawnBrush(copy, true);
+                continue;
+            }
+
+            int index = -1;
+            for (size_t i = 0; i < m_engine.M_LIBRARY.size(); i++)
+            {
+                if (m_engine.M_LIBRARY[i] == source->asset)
+                {
+                    index = static_cast<int>(i);
+                    break;
+                }
+            }
+            if (index < 0)
+            {
+                continue;
+            }
+
+            Model* model = m_engine.addInstance(index, false);
+            if (!model)
+            {
+                continue;
+            }
+            model->name = source->name + " copy";
+            model->position = source->position + offset;
+            model->yawDegrees = source->yawDegrees;
+            model->scale = source->scale;
+            m_engine.updateModelTransform(*model);
+            m_engine.m_shadowDirty = true;
+            m_engine.addToSelection(model);
+            created = true;
         }
-        model->name = source->name + " copy";
-        model->position = source->position + offset;
-        model->yawDegrees = source->yawDegrees;
-        model->scale = source->scale;
-        m_engine.updateModelTransform(*model);
-        m_engine.m_shadowDirty = true;
-        m_engine.m_selected = model;
-        return true;
+        return created;
     }
 
     void rotateSelected(float degrees) override
     {
-        Model* model = m_engine.m_selected;
-        if (!model || model->ghost)
+        if (m_engine.m_selection.empty())
         {
             return;
         }
-
-        model->yawDegrees += degrees;
-        while (model->yawDegrees > 180.0f)
-        {
-            model->yawDegrees -= 360.0f;
-        }
-        while (model->yawDegrees < -180.0f)
-        {
-            model->yawDegrees += 360.0f;
-        }
-        m_engine.updateModelTransform(*model);
+        m_engine.rotateSelection(degrees);
         m_engine.deferShadowUpdate();
     }
 
     void snapSelectedToGrid(float grid) override
     {
-        Model* model = m_engine.m_selected;
-        if (!model || grid <= 0.0f)
+        if (grid <= 0.0f)
         {
             return;
         }
 
-        glm::vec3 half(0.0f);
-        if (model->brush)
+        for (Model* model : m_engine.m_selection)
         {
-            half = model->brush->size * model->scale * 0.5f;
-        }
+            glm::vec3 half(0.0f);
+            if (model->brush)
+            {
+                half = model->brush->size * model->scale * 0.5f;
+            }
 
-        model->position.x = std::round((model->position.x - half.x) / grid) * grid + half.x;
-        model->position.y = std::round(model->position.y / grid) * grid;
-        model->position.z = std::round((model->position.z - half.z) / grid) * grid + half.z;
-        m_engine.updateModelTransform(*model);
+            model->position.x = std::round((model->position.x - half.x) / grid) * grid + half.x;
+            model->position.y = std::round(model->position.y / grid) * grid;
+            model->position.z = std::round((model->position.z - half.z) / grid) * grid + half.z;
+            m_engine.updateModelTransform(*model);
+        }
         m_engine.m_shadowDirty = true;
     }
 
@@ -692,4 +728,53 @@ void BlackGlass::initEditor()
 {
     m_editorHost = std::make_unique<BlackGlassEditorHost>(*this);
     m_editor = std::make_unique<Editor>(*m_editorHost);
+}
+
+bool BlackGlass::handleEditorKey(int key, int mods, bool repeat)
+{
+    if (!m_editor)
+    {
+        return false;
+    }
+
+    m_editor->noteInput();
+
+    const bool command = (mods & (GLFW_MOD_SUPER | GLFW_MOD_CONTROL)) != 0;
+    const bool shift = (mods & GLFW_MOD_SHIFT) != 0;
+
+    if (command)
+    {
+        switch (key)
+        {
+        case GLFW_KEY_Z:
+            return m_editor->execute(shift ? EditorCommand::Redo : EditorCommand::Undo);
+        case GLFW_KEY_Y:
+            return m_editor->execute(EditorCommand::Redo);
+        case GLFW_KEY_D:
+            return repeat || m_editor->execute(EditorCommand::Duplicate);
+        case GLFW_KEY_A:
+            return m_editor->execute(EditorCommand::SelectAll);
+        case GLFW_KEY_S:
+            return repeat || m_editor->execute(EditorCommand::Save);
+        default:
+            return false;
+        }
+    }
+
+    if (repeat || m_mouseCaptured)
+    {
+        return false;
+    }
+
+    switch (key)
+    {
+    case GLFW_KEY_B:
+        return m_editor->execute(EditorCommand::DrawTool);
+    case GLFW_KEY_G:
+        return m_editor->execute(EditorCommand::ToggleGrid);
+    case GLFW_KEY_R:
+        return m_editor->execute(EditorCommand::Rotate);
+    default:
+        return false;
+    }
 }

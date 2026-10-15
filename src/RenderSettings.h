@@ -31,4 +31,6 @@ struct RenderSettings
     bool reflections = true;
     float reflectionStrength = 1.0f;
     float floorRoughness = 0.25f;
+
+    bool operator==(const RenderSettings&) const = default;
 };

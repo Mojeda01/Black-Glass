@@ -19,4 +19,6 @@ struct BrushDef
     glm::vec3 color{ 0.5f, 0.5f, 0.5f };
     float roughness = 0.6f;
     float metallic = 0.0f;
+
+    bool operator==(const BrushDef&) const = default;
 };

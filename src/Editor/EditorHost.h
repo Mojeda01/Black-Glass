@@ -15,7 +15,10 @@ public:
     virtual DebugDraw& debug() = 0;
     virtual bool cursorRay(glm::vec3& origin, glm::vec3& direction) const = 0;
     virtual bool cursorFree() const = 0;
-    virtual bool selectedBounds(glm::mat4& transform, glm::vec3& localMin, glm::vec3& localMax) const = 0;
+    virtual int selectionCount() const = 0;
+    virtual bool selectionBounds(int index, glm::mat4& transform, glm::vec3& localMin, glm::vec3& localMax) const = 0;
+    virtual void clearSelection() = 0;
+    virtual void selectAll() = 0;
     virtual void cancelPlacement() = 0;
     virtual bool viewInfo(ViewInfo& view) const = 0;
     virtual bool pickSurface(const glm::vec3& origin, const glm::vec3& direction, SurfaceHit& hit) const = 0;

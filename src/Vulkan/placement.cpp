@@ -113,6 +113,99 @@ Model* BlackGlass::pickModel(const glm::vec3& origin, const glm::vec3& direction
     return best;
 }
 
+bool BlackGlass::isSelected(const Model* model) const
+{
+    return std::find(m_selection.begin(), m_selection.end(), model) != m_selection.end();
+}
+
+void BlackGlass::clearSelection()
+{
+    m_selection.clear();
+    m_selected = nullptr;
+    m_dragging = false;
+}
+
+void BlackGlass::selectOnly(Model* model)
+{
+    m_selection.clear();
+    m_selected = nullptr;
+    addToSelection(model);
+}
+
+void BlackGlass::addToSelection(Model* model)
+{
+    if (!model)
+    {
+        return;
+    }
+    if (!isSelected(model))
+    {
+        m_selection.push_back(model);
+    }
+    m_selected = model;
+}
+
+void BlackGlass::toggleSelection(Model* model)
+{
+    if (!model)
+    {
+        return;
+    }
+    auto found = std::find(m_selection.begin(), m_selection.end(), model);
+    if (found == m_selection.end())
+    {
+        addToSelection(model);
+        return;
+    }
+    m_selection.erase(found);
+    if (m_selected == model)
+    {
+        m_selected = m_selection.empty() ? nullptr : m_selection.back();
+    }
+}
+
+void BlackGlass::rotateSelection(float degrees)
+{
+    if (m_selection.empty())
+    {
+        return;
+    }
+
+    glm::vec2 center(0.0f);
+    for (const Model* model : m_selection)
+    {
+        center += glm::vec2(model->position.x, model->position.z);
+    }
+    center /= static_cast<float>(m_selection.size());
+
+    float radians = glm::radians(degrees);
+    float cosine = std::cos(radians);
+    float sine = std::sin(radians);
+    bool orbit = m_selection.size() > 1;
+
+    for (Model* model : m_selection)
+    {
+        if (orbit)
+        {
+            float dx = model->position.x - center.x;
+            float dz = model->position.z - center.y;
+            model->position.x = center.x + dx * cosine + dz * sine;
+            model->position.z = center.y - dx * sine + dz * cosine;
+        }
+
+        model->yawDegrees += degrees;
+        while (model->yawDegrees > 180.0f)
+        {
+            model->yawDegrees -= 360.0f;
+        }
+        while (model->yawDegrees < -180.0f)
+        {
+            model->yawDegrees += 360.0f;
+        }
+        updateModelTransform(*model);
+    }
+}
+
 void BlackGlass::beginPlacement(int assetIndex)
 {
     cancelPlacement();
@@ -127,7 +220,7 @@ void BlackGlass::beginPlacement(int assetIndex)
         m_ghost->ghost = true;
         m_ghost->visible = false;
         m_placingAsset = assetIndex;
-        m_selected = nullptr;
+        clearSelection();
     }
 }
 
@@ -179,9 +272,14 @@ void BlackGlass::updateInteraction()
         glm::vec3 hit;
         if (cursorRay(origin, direction) && intersectGround(origin, direction, m_selected->position.y, hit))
         {
-            m_selected->position.x = hit.x + m_dragOffset.x;
-            m_selected->position.z = hit.z + m_dragOffset.y;
-            updateModelTransform(*m_selected);
+            float deltaX = hit.x + m_dragOffset.x - m_selected->position.x;
+            float deltaZ = hit.z + m_dragOffset.y - m_selected->position.z;
+            for (Model* model : m_selection)
+            {
+                model->position.x += deltaX;
+                model->position.z += deltaZ;
+                updateModelTransform(*model);
+            }
         }
     }
 }
@@ -208,7 +306,7 @@ void BlackGlass::onLeftPress(bool shiftHeld)
         Model* placed = m_ghost;
         int assetIndex = m_placingAsset;
         placed->ghost = false;
-        m_selected = placed;
+        selectOnly(placed);
         m_ghost = nullptr;
         m_placingAsset = -1;
         m_shadowDirty = true;
@@ -216,7 +314,7 @@ void BlackGlass::onLeftPress(bool shiftHeld)
         if (shiftHeld)
         {
             beginPlacement(assetIndex);
-            m_selected = placed;
+            selectOnly(placed);
         }
         return;
     }
@@ -229,10 +327,27 @@ void BlackGlass::onLeftPress(bool shiftHeld)
     }
 
     float distance = 0.0f;
-    m_selected = pickModel(origin, direction, distance);
+    Model* picked = pickModel(origin, direction, distance);
     m_dragging = false;
 
-    if (m_selected)
+    if (shiftHeld)
+    {
+        toggleSelection(picked);
+    }
+    else if (!picked)
+    {
+        clearSelection();
+    }
+    else if (isSelected(picked))
+    {
+        m_selected = picked;
+    }
+    else
+    {
+        selectOnly(picked);
+    }
+
+    if (m_selected && picked && isSelected(picked))
     {
         glm::vec3 hit;
         if (intersectGround(origin, direction, m_selected->position.y, hit))
@@ -281,25 +396,38 @@ void BlackGlass::onScroll(double delta)
         return;
     }
 
-    Model* target = m_ghost ? m_ghost : m_selected;
-    if (!target)
+    float degrees = static_cast<float>(delta) * 7.5f;
+
+    if (m_ghost)
+    {
+        m_ghost->yawDegrees += degrees;
+        if (m_ghost->yawDegrees > 180.0f)
+        {
+            m_ghost->yawDegrees -= 360.0f;
+        }
+        if (m_ghost->yawDegrees < -180.0f)
+        {
+            m_ghost->yawDegrees += 360.0f;
+        }
+        updateModelTransform(*m_ghost);
+        return;
+    }
+
+    if (m_selection.empty())
     {
         return;
     }
 
-    target->yawDegrees += static_cast<float>(delta) * 7.5f;
-    if (target->yawDegrees > 180.0f)
+    noteEditorInput();
+    rotateSelection(degrees);
+    m_shadowDirty = true;
+}
+
+void BlackGlass::noteEditorInput()
+{
+    if (m_editor)
     {
-        target->yawDegrees -= 360.0f;
-    }
-    if (target->yawDegrees < -180.0f)
-    {
-        target->yawDegrees += 360.0f;
-    }
-    updateModelTransform(*target);
-    if (!target->ghost)
-    {
-        m_shadowDirty = true;
+        m_editor->noteInput();
     }
 }
 
@@ -311,17 +439,16 @@ void BlackGlass::deleteSelected()
         return;
     }
 
-    if (!m_selected)
+    std::vector<Model*> doomed = m_selection;
+    for (Model* target : doomed)
     {
-        return;
-    }
-
-    for (size_t i = 0; i < M_MODELS.size(); i++)
-    {
-        if (M_MODELS[i].get() == m_selected)
+        for (size_t i = 0; i < M_MODELS.size(); i++)
         {
-            removeModel(i);
-            break;
+            if (M_MODELS[i].get() == target)
+            {
+                removeModel(i);
+                break;
+            }
         }
     }
 }

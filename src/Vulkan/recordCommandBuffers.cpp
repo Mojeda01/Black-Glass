@@ -318,7 +318,7 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
         {
             highlight = glm::vec4(0.25f, 0.85f, 1.0f, 0.18f);
         }
-        else if (&model == m_selected)
+        else if (isSelected(&model))
         {
             highlight = glm::vec4(1.0f, 0.6f, 0.15f, 0.1f);
         }

@@ -411,9 +411,14 @@ void BlackGlass::removeModel(size_t index)
     }
 
     Model* target = M_MODELS[index].get();
+    auto selectedIt = std::find(m_selection.begin(), m_selection.end(), target);
+    if (selectedIt != m_selection.end())
+    {
+        m_selection.erase(selectedIt);
+    }
     if (m_selected == target)
     {
-        m_selected = nullptr;
+        m_selected = m_selection.empty() ? nullptr : m_selection.back();
         m_dragging = false;
     }
     if (m_ghost == target)

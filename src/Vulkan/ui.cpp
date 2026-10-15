@@ -594,7 +594,7 @@ void BlackGlass::buildUi()
                 }
                 if (addIndex >= 0)
                 {
-                    m_selected = addInstance(addIndex, true);
+                    selectOnly(addInstance(addIndex, true));
                 }
                 if (unloadIndex < M_LIBRARY.size())
                 {
@@ -617,14 +617,21 @@ void BlackGlass::buildUi()
 
                     ImGui::PushID(static_cast<int>(i));
                     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen;
-                    if (&model == m_selected)
+                    if (isSelected(&model))
                     {
                         flags |= ImGuiTreeNodeFlags_Selected;
                     }
                     bool open = ImGui::TreeNodeEx(model.name.c_str(), flags);
                     if (ImGui::IsItemClicked())
                     {
-                        m_selected = &model;
+                        if (ImGui::GetIO().KeyShift)
+                        {
+                            toggleSelection(&model);
+                        }
+                        else
+                        {
+                            selectOnly(&model);
+                        }
                     }
                     if (open)
                     {

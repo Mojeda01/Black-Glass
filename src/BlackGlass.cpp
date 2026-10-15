@@ -131,6 +131,7 @@ void BlackGlass::cleanup()
     
     M_MODELS.clear();
     m_selected = nullptr;
+    m_selection.clear();
     m_ghost = nullptr;
     for (auto& asset : M_LIBRARY)
     {

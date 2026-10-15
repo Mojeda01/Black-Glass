@@ -183,6 +183,8 @@ public:
     void onRightRelease();
     void onScroll(double delta);
     void deleteSelected();
+    bool handleEditorKey(int key, int mods, bool repeat);
+    void noteEditorInput();
     Camera& camera() { return m_camera; }
 private:
     GLFWwindow* m_window = nullptr;
@@ -326,6 +328,7 @@ private:
     std::vector<std::unique_ptr<Model>> M_MODELS;
     std::unique_ptr<Model> M_GROUND;
     Model* m_selected = nullptr;
+    std::vector<Model*> m_selection;
     Model* m_ghost = nullptr;
     int m_placingAsset = -1;
     bool m_dragging = false;
@@ -373,6 +376,12 @@ private:
     void scanAssets();
     int importAsset(const std::string& path);
     Model* addInstance(int assetIndex, bool autoPlace);
+    bool isSelected(const Model* model) const;
+    void clearSelection();
+    void selectOnly(Model* model);
+    void addToSelection(Model* model);
+    void toggleSelection(Model* model);
+    void rotateSelection(float degrees);
     void removeModel(size_t index);
     void removeAsset(size_t index);
     void destroyAsset(ModelAsset& asset);

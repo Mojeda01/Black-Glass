@@ -115,7 +115,7 @@ void initBlackGlass() {
                 });
 
          glfwSetKeyCallback(window.get(),
-                 [](GLFWwindow* w, int key, int, int action, int) {
+                 [](GLFWwindow* w, int key, int, int action, int mods) {
                     auto* r = static_cast<BlackGlass*>(glfwGetWindowUserPointer(w));
                     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
                     {
@@ -148,6 +148,11 @@ void initBlackGlass() {
                     {
                         return;
                     }
+                    if (r && (action == GLFW_PRESS || action == GLFW_REPEAT) &&
+                        r->handleEditorKey(key, mods, action == GLFW_REPEAT))
+                    {
+                        return;
+                    }
                     if (r && action == GLFW_PRESS && (key == GLFW_KEY_DELETE || key == GLFW_KEY_BACKSPACE))
                     {
                         r->deleteSelected();
@@ -161,10 +166,6 @@ void initBlackGlass() {
                     {
                         if (key == GLFW_KEY_EQUAL) r->adjustExposure(0.25f);
                         if (key == GLFW_KEY_MINUS) r->adjustExposure(-0.25f);
-                    }
-                    if (r && action == GLFW_PRESS && key == GLFW_KEY_B)
-                    {
-                        r->toggleBloom();
                     }
                  });
 

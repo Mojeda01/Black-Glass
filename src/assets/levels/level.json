@@ -2,27 +2,54 @@
   "brushes": [
     {
       "color": [
-        1.0,
-        0.11372549086809158,
-        0.21176470816135406
+        0.5,
+        0.5,
+        0.5
       ],
       "metallic": 0.0,
-      "name": "Brush 1",
+      "name": "Box 1",
       "position": [
-        -1.3777198791503906,
+        -2.0,
         0.0,
-        -0.054944515228271484
+        1.5
       ],
-      "roughness": 0.5400000214576721,
-      "shape": "box",
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
       "size": [
-        2.0,
-        2.0,
-        2.0
+        1.0,
+        1.0,
+        1.0
       ],
+      "steps": 8,
       "yaw": 0.0
     }
   ],
+  "camera": {
+    "pitch": -22.399991989135742,
+    "position": [
+      2.464313268661499,
+      2.9554152488708496,
+      5.943932056427002
+    ],
+    "yaw": -123.0999526977539
+  },
   "models": [],
+  "settings": {
+    "bloom": true,
+    "bloomStrength": 0.03999999910593033,
+    "envIntensity": 1.0,
+    "exposure": 1.0,
+    "floorRoughness": 0.25,
+    "reflectionStrength": 1.0,
+    "reflections": true,
+    "shadows": true,
+    "ssao": true,
+    "ssaoIntensity": 1.0,
+    "ssaoRadius": 0.5,
+    "sunAzimuth": 30.96375846862793,
+    "sunElevation": 59.753746032714844,
+    "sunIntensity": 3.0,
+    "tonemapper": 0
+  },
   "version": 1
 }
