@@ -66,6 +66,10 @@ add_library(black_glass_engine STATIC
     imgui/imgui_impl_glfw.cpp
     imgui/imgui_impl_vulkan.cpp
     Vulkan/loadGltf.cpp
+    Vulkan/editorHost.cpp
+    Editor/BrushMesh.cpp
+    Editor/LevelIO.cpp
+    Editor/Editor.cpp
     initVulkan.cpp
 )
 

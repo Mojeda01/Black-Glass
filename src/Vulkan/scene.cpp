@@ -218,24 +218,12 @@ void BlackGlass::frameScene()
     m_camera.position = center - m_camera.front() * distance;
 }
 
-int BlackGlass::importAsset(const std::string& path)
+namespace
 {
-    try
+    void computeMeshBounds(const MeshData& mesh, glm::vec3& lo, glm::vec3& hi)
     {
-        if (!std::filesystem::exists(path))
-        {
-            throw std::runtime_error("File not found: " + path);
-        }
-
-        MeshData mesh = loadGltf(path);
-        classifyPrimitives(mesh);
-
-        auto asset = std::make_shared<ModelAsset>();
-        asset->path = path;
-        asset->name = std::filesystem::path(path).stem().string();
-
-        glm::vec3 lo(std::numeric_limits<float>::max());
-        glm::vec3 hi(std::numeric_limits<float>::lowest());
+        lo = glm::vec3(std::numeric_limits<float>::max());
+        hi = glm::vec3(std::numeric_limits<float>::lowest());
         for (const Primitive& prim : mesh.primitives)
         {
             for (uint32_t i = 0; i < prim.indexCount; i++)
@@ -246,26 +234,93 @@ int BlackGlass::importAsset(const std::string& path)
                 hi = glm::max(hi, world);
             }
         }
-        asset->localMin = lo;
-        asset->localMax = hi;
+    }
+}
 
-        vkDeviceWaitIdle(M_DEVICE);
-        try
+int BlackGlass::registerAsset(MeshData& mesh, const std::string& name, const std::string& path)
+{
+    classifyPrimitives(mesh);
+
+    auto asset = std::make_shared<ModelAsset>();
+    asset->path = path;
+    asset->name = name;
+    computeMeshBounds(mesh, asset->localMin, asset->localMax);
+
+    vkDeviceWaitIdle(M_DEVICE);
+    try
+    {
+        uploadModelGeometry(*asset, mesh);
+        createModelTextures(*asset, mesh);
+    }
+    catch (...)
+    {
+        destroyAsset(*asset);
+        throw;
+    }
+
+    M_LIBRARY.push_back(std::move(asset));
+    return static_cast<int>(M_LIBRARY.size()) - 1;
+}
+
+void BlackGlass::replaceAssetMesh(ModelAsset& asset, MeshData& mesh)
+{
+    classifyPrimitives(mesh);
+
+    vkDeviceWaitIdle(M_DEVICE);
+    destroyBuffer(asset.vertexBuffer);
+    destroyBuffer(asset.indexBuffer);
+    destroyBuffer(asset.materialBuffer);
+    asset.materials.clear();
+    asset.primitives.clear();
+
+    computeMeshBounds(mesh, asset.localMin, asset.localMax);
+    uploadModelGeometry(asset, mesh);
+    createModelTextures(asset, mesh);
+    m_shadowDirty = true;
+}
+
+void BlackGlass::purgeUnusedBrushAssets()
+{
+    m_brushPurgePending = false;
+
+    for (size_t i = M_LIBRARY.size(); i-- > 0;)
+    {
+        if (!M_LIBRARY[i]->brush)
         {
-            uploadModelGeometry(*asset, mesh);
-            createModelTextures(*asset, mesh);
-        }
-        catch (...)
-        {
-            destroyAsset(*asset);
-            throw;
+            continue;
         }
 
-        M_LIBRARY.push_back(std::move(asset));
+        bool used = false;
+        for (const auto& model : M_MODELS)
+        {
+            if (model->asset == M_LIBRARY[i])
+            {
+                used = true;
+                break;
+            }
+        }
+        if (!used)
+        {
+            removeAsset(i);
+        }
+    }
+}
+
+int BlackGlass::importAsset(const std::string& path)
+{
+    try
+    {
+        if (!std::filesystem::exists(path))
+        {
+            throw std::runtime_error("File not found: " + path);
+        }
+
+        MeshData mesh = loadGltf(path);
+        int index = registerAsset(mesh, std::filesystem::path(path).stem().string(), path);
         m_loadError.clear();
 
         std::cout << "  [importAsset] SUCCESS - " << path << "\n";
-        return static_cast<int>(M_LIBRARY.size()) - 1;
+        return index;
     }
     catch (const std::exception& e)
     {
@@ -350,7 +405,12 @@ void BlackGlass::removeModel(size_t index)
         m_ghost = nullptr;
         m_placingAsset = -1;
     }
+    bool brushModel = target->asset && target->asset->brush;
     M_MODELS.erase(M_MODELS.begin() + static_cast<std::ptrdiff_t>(index));
+    if (brushModel)
+    {
+        m_brushPurgePending = true;
+    }
     m_shadowDirty = true;
 }
 

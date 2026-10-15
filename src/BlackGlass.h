@@ -5,6 +5,8 @@
 #include "vma/vk_mem_alloc.h"
 
 #include "Camera.h"
+#include "MeshData.h"
+#include "Editor/Brush.h"
 #include "RenderSettings.h"
 
 #include <vector>
@@ -45,134 +47,6 @@ struct AllocatedImage
     VkFormat format = VK_FORMAT_UNDEFINED;
 };
 
-struct Vertex 
-{
-    glm::vec3 pos;
-    glm::vec3 color;
-    glm::vec2 texCoord;
-    glm::vec3 normal;
-    glm::vec4 tangent;
-
-    static VkVertexInputBindingDescription getBindingDescription()
-    {
-        VkVertexInputBindingDescription bindingDescription{};
-        bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Vertex);
-        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-        return bindingDescription;
-    }
-
-    static std::array<VkVertexInputAttributeDescription, 5> getAttributeDescriptions() 
-    {
-        std::array<VkVertexInputAttributeDescription, 5> attributeDescriptions{}; 
-        attributeDescriptions[0].binding = 0;
-        attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(Vertex, pos);
-        attributeDescriptions[1].binding = 0;
-        attributeDescriptions[1].location = 1;
-        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Vertex, color);
-
-        attributeDescriptions[2].binding = 0;
-        attributeDescriptions[2].location = 2;
-        attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-        attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
-
-        attributeDescriptions[3].binding = 0;
-        attributeDescriptions[3].location = 3;
-        attributeDescriptions[3].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[3].offset = offsetof(Vertex, normal);
-
-        attributeDescriptions[4].binding = 0;
-        attributeDescriptions[4].location = 4;
-        attributeDescriptions[4].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-        attributeDescriptions[4].offset = offsetof(Vertex, tangent);
-
-        return attributeDescriptions;
-    }
-};
-
-constexpr uint32_t MATERIAL_TEXTURE_SLOTS = 5;
-
-enum class RenderClass
-{
-    Opaque,
-    Transmissive,
-    Blend
-};
-
-struct Primitive
-{
-    uint32_t firstIndex = 0;
-    uint32_t indexCount = 0;
-    int materialIndex = 0;
-    glm::mat4 worldMatrix = glm::mat4(1.0f);
-    bool castsShadow = true;
-    RenderClass renderClass = RenderClass::Opaque;
-    glm::vec3 boundsCenter{ 0.0f };
-};
-
-struct ImageData
-{
-    std::vector<unsigned char> pixels;
-    int width = 0;
-    int height = 0;
-};
-
-struct SamplerData
-{
-    VkFilter magFilter = VK_FILTER_LINEAR;
-    VkFilter minFilter = VK_FILTER_LINEAR;
-    VkSamplerAddressMode wrapS = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    VkSamplerAddressMode wrapT = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-};
-
-struct TextureData
-{
-    int image = -1;
-    int sampler = -1;
-    bool srgb = true;
-};
-
-struct MaterialParams
-{
-    glm::vec4 baseColorFactor{ 1.0f };
-    glm::vec4 emissiveFactor{ 0.0f, 0.0f, 0.0f, 0.5f };
-    glm::vec4 factors{ 0.0f, 0.5f, 1.0f, 1.0f };
-    glm::ivec4 flags0{ 0 };
-    glm::ivec4 flags1{ 0 };
-    glm::vec4 uvLinear[MATERIAL_TEXTURE_SLOTS] = {
-        { 1.0f, 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f, 1.0f },
-        { 1.0f, 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }
-    };
-    glm::vec4 uvOffset[MATERIAL_TEXTURE_SLOTS] = {};
-    glm::vec4 transmissionParams{ 0.0f, 1.5f, 0.0f, 0.0f };
-    glm::vec4 clearcoatParams{ 0.0f, 0.0f, 0.0f, 0.0f };
-};
-
-struct Material
-{
-    MaterialParams params;
-    std::array<int, MATERIAL_TEXTURE_SLOTS> textures{ -1, -1, -1, -1, -1 };
-};
-
-struct GpuTexture
-{
-    VkImageView view = VK_NULL_HANDLE;
-    VkSampler sampler = VK_NULL_HANDLE;
-};
-
-struct MeshData {
-    std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
-    std::vector<Primitive> primitives;
-    std::vector<ImageData> images;
-    std::vector<SamplerData> samplers;
-    std::vector<TextureData> textures;
-    std::vector<Material> materials;
-};
-
 struct ModelAsset
 {
     std::string name;
@@ -188,6 +62,7 @@ struct ModelAsset
     std::vector<Primitive> primitives;
     glm::vec3 localMin{ 0.0f };
     glm::vec3 localMax{ 0.0f };
+    std::shared_ptr<BrushDef> brush;
 };
 
 struct Model
@@ -270,7 +145,12 @@ const std::vector<const char*> DEVICE_EXTENSIONS =
 // populate the debug messenger.
 void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
 
+class Editor;
+class EditorHost;
+class BlackGlassEditorHost;
+
 class BlackGlass{
+    friend class BlackGlassEditorHost;
 public:
     explicit BlackGlass(GLFWwindow* window);
     ~BlackGlass();
@@ -330,6 +210,9 @@ private:
     char m_assetSearch[64] = {};
     float m_fitSize = 10.0f;
     std::string m_settingsStatus;
+    std::unique_ptr<EditorHost> m_editorHost;
+    std::unique_ptr<Editor> m_editor;
+    bool m_brushPurgePending = false;
     RenderSettings m_defaultSettings;
     bool m_quitPrompt = false;
     VkFormat m_uiColorFormat = VK_FORMAT_UNDEFINED;
@@ -514,6 +397,10 @@ private:
     void createModelMaterialBuffer(ModelAsset& model);
     VkSampler createSamplerObject(const SamplerData& data);
     MeshData loadGltf(const std::string& path);
+    int registerAsset(MeshData& mesh, const std::string& name, const std::string& path);
+    void replaceAssetMesh(ModelAsset& asset, MeshData& mesh);
+    void purgeUnusedBrushAssets();
+    void initEditor();
     void createTextureSampler();
     void transitionImageLayoutImmediate(VkImage image, VkImageLayout oldLayout,
                                         VkImageLayout newLayout);

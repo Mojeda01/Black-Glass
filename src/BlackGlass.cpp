@@ -1,4 +1,5 @@
 #include "BlackGlass.h"
+#include "Editor/Editor.h"
 #include <iostream>
 #include <stdexcept>
 
@@ -46,6 +47,10 @@ void BlackGlass::drawFrame()
     vkResetCommandBuffer(M_COMMANDBUFFERS[M_CURRENTFRAME], 0);
     beginUiFrame();
     updateInteraction();
+    if (m_brushPurgePending)
+    {
+        purgeUnusedBrushAssets();
+    }
     if (m_shadowDirty)
     {
         vkDeviceWaitIdle(M_DEVICE);

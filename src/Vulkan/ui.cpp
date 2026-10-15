@@ -1,4 +1,5 @@
 #include "../BlackGlass.h"
+#include "../Editor/Editor.h"
 #include <iostream>
 #include <algorithm>
 #include <cctype>
@@ -247,6 +248,8 @@ void BlackGlass::initImGui()
     m_defaultSettings = m_settings;
 
     scanAssets();
+
+    initEditor();
 
     m_imguiReady = true;
     std::cout << "  [initImGui] SUCCESS - Dear ImGui ready.\n";
@@ -525,6 +528,11 @@ void BlackGlass::buildUi()
                 int addIndex = -1;
                 for (size_t i = 0; i < M_LIBRARY.size(); i++)
                 {
+                    if (M_LIBRARY[i]->brush)
+                    {
+                        continue;
+                    }
+
                     int instances = 0;
                     for (const auto& model : M_MODELS)
                     {
@@ -672,6 +680,15 @@ void BlackGlass::buildUi()
                 ImGui::Text("Position  %.2f  %.2f  %.2f", m_camera.position.x, m_camera.position.y, m_camera.position.z);
             }
 
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Editor"))
+        {
+            if (m_editor)
+            {
+                m_editor->drawPanel();
+            }
             ImGui::EndTabItem();
         }
 
