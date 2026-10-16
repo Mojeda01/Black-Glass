@@ -5,6 +5,7 @@
 #include "EditorHost.h"
 #include "History.h"
 #include "RotationGizmo.h"
+#include "TranslateGizmo.h"
 
 #include <chrono>
 #include <string>
@@ -15,11 +16,15 @@ enum class EditorCommand
     Undo,
     Redo,
     Duplicate,
+    Copy,
+    Cut,
+    Paste,
     SelectAll,
     DrawTool,
     SelectTool,
     ToggleGrid,
     Rotate,
+    ToggleMoveGizmo,
     Save,
     AddLight,
     Focus,
@@ -64,6 +69,10 @@ private:
     void drawSelectionActions(bool locked);
     bool drawTextureControls(BrushDef& brush, const char* suffix);
 
+    bool copySelection();
+    bool pasteClipboard();
+    bool clipboardEmpty() const;
+
     void addBrush(BrushShape shape);
     void addLight();
     void addSpawn();
@@ -102,6 +111,8 @@ private:
     BrushTool m_tool;
     BrushHandles m_handles;
     RotationGizmo m_gizmo;
+    TranslateGizmo m_move;
+    bool m_showMoveGizmo = true;
     float m_rotateSnap = 15.0f;
     std::string m_label;
     bool m_showGrid = true;
@@ -120,6 +131,12 @@ private:
     History m_history;
     bool m_historyDirty = false;
     bool m_dirty = false;
+
+    LevelData m_clipboard;
+
+    bool m_marqueeActive = false;
+    bool m_marqueeAdditive = false;
+    glm::vec2 m_marqueeStart{ 0.0f };
 
     std::vector<ItemInfo> m_items;
     char m_outlinerFilter[64] = {};

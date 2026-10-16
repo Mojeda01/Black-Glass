@@ -7,11 +7,13 @@ enum class BrushShape
 {
     Box,
     Ramp,
-    Stairs
+    Stairs,
+    Wedge,
+    Cylinder
 };
 
-constexpr int BRUSH_SHAPE_COUNT = 3;
-constexpr const char* BRUSH_SHAPE_NAMES[BRUSH_SHAPE_COUNT] = { "Box", "Ramp", "Stairs" };
+constexpr int BRUSH_SHAPE_COUNT = 5;
+constexpr const char* BRUSH_SHAPE_NAMES[BRUSH_SHAPE_COUNT] = { "Box", "Ramp", "Stairs", "Wedge", "Cylinder" };
 
 struct BrushDef
 {

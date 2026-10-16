@@ -8,6 +8,12 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <limits>
+
+namespace
+{
+    constexpr float MARQUEE_MIN_DRAG = 4.0f;
+}
 
 Editor::Editor(EditorHost& host)
     : m_host(host)
@@ -186,6 +192,112 @@ void Editor::refreshLevelList()
     std::sort(m_levelFiles.begin(), m_levelFiles.end());
 }
 
+bool Editor::clipboardEmpty() const
+{
+    return m_clipboard.brushes.empty() && m_clipboard.models.empty() &&
+           m_clipboard.lights.empty() && m_clipboard.spawns.empty();
+}
+
+bool Editor::copySelection()
+{
+    if (m_host.selectionCount() == 0)
+    {
+        return false;
+    }
+    m_clipboard = m_host.captureSelection();
+    if (clipboardEmpty())
+    {
+        return false;
+    }
+    int count = static_cast<int>(m_clipboard.brushes.size() + m_clipboard.models.size() +
+                                 m_clipboard.lights.size() + m_clipboard.spawns.size());
+    m_status = "Copied " + std::to_string(count) + (count == 1 ? " item" : " items");
+    return true;
+}
+
+bool Editor::pasteClipboard()
+{
+    if (clipboardEmpty())
+    {
+        m_status = "Clipboard is empty";
+        return false;
+    }
+
+    glm::vec3 lo(std::numeric_limits<float>::max());
+    glm::vec3 hi(std::numeric_limits<float>::lowest());
+    auto grow = [&](const glm::vec3& position)
+    {
+        lo = glm::min(lo, position);
+        hi = glm::max(hi, position);
+    };
+    for (const LevelBrush& item : m_clipboard.brushes)
+    {
+        grow(item.position);
+    }
+    for (const LevelModel& item : m_clipboard.models)
+    {
+        grow(item.position);
+    }
+    for (const LevelLight& item : m_clipboard.lights)
+    {
+        grow(item.position);
+    }
+    for (const LevelSpawn& item : m_clipboard.spawns)
+    {
+        grow(item.position);
+    }
+    glm::vec3 center = (lo + hi) * 0.5f;
+
+    glm::vec3 target = m_host.spawnPoint();
+    float deltaY = 0.0f;
+    glm::vec3 origin(0.0f);
+    glm::vec3 direction(0.0f, -1.0f, 0.0f);
+    SurfaceHit surface;
+    if (m_host.cursorFree() && m_host.cursorRay(origin, direction) &&
+        m_host.pickSurface(origin, direction, surface))
+    {
+        target = surface.point;
+        deltaY = std::round((surface.point.y - lo.y) / m_gridSize) * m_gridSize;
+    }
+
+    glm::vec3 delta(std::round((target.x - center.x) / m_gridSize) * m_gridSize,
+                    deltaY,
+                    std::round((target.z - center.z) / m_gridSize) * m_gridSize);
+
+    m_host.clearSelection();
+    bool created = false;
+    for (LevelBrush item : m_clipboard.brushes)
+    {
+        item.position += delta;
+        item.hidden = false;
+        created |= m_host.spawnBrush(item, true);
+    }
+    for (LevelModel item : m_clipboard.models)
+    {
+        item.position += delta;
+        item.hidden = false;
+        item.selected = true;
+        created |= m_host.spawnModel(item);
+    }
+    for (LevelLight item : m_clipboard.lights)
+    {
+        item.position += delta;
+        item.hidden = false;
+        created |= m_host.spawnLight(item, true);
+    }
+    for (LevelSpawn item : m_clipboard.spawns)
+    {
+        item.position += delta;
+        item.hidden = false;
+        created |= m_host.spawnSpawn(item, true);
+    }
+    if (created)
+    {
+        m_status = "Pasted";
+    }
+    return created;
+}
+
 void Editor::addBrush(BrushShape shape)
 {
     glm::vec3 point = m_host.spawnPoint();
@@ -294,15 +406,30 @@ void Editor::update(bool overlayVisible)
         m_host.setSelectedBrush(edit.position, edit.size);
     }
 
-    RotationTarget ring;
     bool handlesBusy = m_handles.hovering() || m_handles.dragging();
-    if (!m_tool.armed() && !handlesBusy)
+    bool shiftHeld = ImGui::GetIO().KeyShift;
+
+    TranslateTarget arrows;
+    float radius = 0.0f;
+    if (m_showMoveGizmo && !m_tool.armed() && !handlesBusy)
+    {
+        arrows.valid = m_host.rotationFrame(arrows.center, radius);
+    }
+    glm::vec3 moveStep(0.0f);
+    if (m_move.update(view, arrows, hasRay, origin, direction, free && !handlesBusy,
+                      shiftHeld ? 0.0f : m_gridSize, overlayVisible, m_host.debug(), moveStep, label))
+    {
+        m_host.translateSelected(moveStep);
+    }
+    bool moveBusy = m_move.hovering() || m_move.dragging();
+
+    RotationTarget ring;
+    if (!m_tool.armed() && !handlesBusy && !moveBusy)
     {
         ring.valid = m_host.rotationFrame(ring.center, ring.radius);
     }
     float yawStep = 0.0f;
-    bool shiftHeld = ImGui::GetIO().KeyShift;
-    if (m_gizmo.update(view, ring, hasRay, origin, direction, free && !handlesBusy,
+    if (m_gizmo.update(view, ring, hasRay, origin, direction, free && !handlesBusy && !moveBusy,
                        shiftHeld ? 0.0f : m_rotateSnap, overlayVisible, m_host.debug(), yawStep, label))
     {
         m_host.rotateSelected(yawStep);
@@ -345,7 +472,8 @@ void Editor::trackHistory(bool overlayVisible)
 
     ImGuiIO& io = ImGui::GetIO();
     bool busy = io.MouseDown[0] || io.MouseDown[1] || io.MouseDown[2] ||
-                (overlayVisible && ImGui::IsAnyItemActive()) || m_handles.dragging() || m_gizmo.dragging();
+                (overlayVisible && ImGui::IsAnyItemActive()) || m_handles.dragging() || m_gizmo.dragging() ||
+                m_move.dragging();
     if (busy)
     {
         m_historyDirty = true;
@@ -443,6 +571,17 @@ bool Editor::execute(EditorCommand command)
         return redo();
     case EditorCommand::Duplicate:
         return m_host.duplicateSelected(glm::vec3(m_gridSize, 0.0f, m_gridSize));
+    case EditorCommand::Copy:
+        return copySelection();
+    case EditorCommand::Cut:
+        if (!copySelection())
+        {
+            return false;
+        }
+        m_host.deleteSelection();
+        return true;
+    case EditorCommand::Paste:
+        return pasteClipboard();
     case EditorCommand::SelectAll:
         m_host.selectAll();
         return true;
@@ -475,6 +614,9 @@ bool Editor::execute(EditorCommand command)
         }
         m_host.rotateSelected(90.0f);
         return true;
+    case EditorCommand::ToggleMoveGizmo:
+        m_showMoveGizmo = !m_showMoveGizmo;
+        return true;
     case EditorCommand::Save:
         saveLevel();
         return true;
@@ -487,6 +629,19 @@ bool Editor::execute(EditorCommand command)
 
 void Editor::drawOverlayUi()
 {
+    if (m_marqueeActive)
+    {
+        ImVec2 mouse = ImGui::GetIO().MousePos;
+        ImVec2 lo(std::min(m_marqueeStart.x, mouse.x), std::min(m_marqueeStart.y, mouse.y));
+        ImVec2 hi(std::max(m_marqueeStart.x, mouse.x), std::max(m_marqueeStart.y, mouse.y));
+        if (hi.x - lo.x >= MARQUEE_MIN_DRAG || hi.y - lo.y >= MARQUEE_MIN_DRAG)
+        {
+            ImDrawList* list = ImGui::GetForegroundDrawList();
+            list->AddRectFilled(lo, hi, IM_COL32(255, 140, 26, 40));
+            list->AddRect(lo, hi, IM_COL32(255, 140, 26, 230));
+        }
+    }
+
     if (m_label.empty())
     {
         return;
@@ -512,14 +667,52 @@ bool Editor::onLeftPress()
     {
         return true;
     }
-    return m_gizmo.onPress();
+    if (m_move.onPress())
+    {
+        return true;
+    }
+    if (m_gizmo.onPress())
+    {
+        return true;
+    }
+
+    ViewInfo view;
+    if (m_host.viewInfo(view) && m_host.emptySpaceUnderCursor())
+    {
+        m_marqueeActive = true;
+        m_marqueeStart = view.cursor;
+        m_marqueeAdditive = ImGui::GetIO().KeyShift;
+    }
+    return false;
 }
 
 void Editor::onLeftRelease()
 {
     m_tool.onRelease();
     m_handles.onRelease();
+    m_move.onRelease();
     m_gizmo.onRelease();
+
+    if (!m_marqueeActive)
+    {
+        return;
+    }
+    m_marqueeActive = false;
+
+    ViewInfo view;
+    if (!m_host.viewInfo(view))
+    {
+        return;
+    }
+    glm::vec2 lo = glm::min(m_marqueeStart, view.cursor);
+    glm::vec2 hi = glm::max(m_marqueeStart, view.cursor);
+    if (hi.x - lo.x < MARQUEE_MIN_DRAG && hi.y - lo.y < MARQUEE_MIN_DRAG)
+    {
+        return;
+    }
+    m_host.selectInRect(lo, hi, m_marqueeAdditive);
+    int count = m_host.selectionCount();
+    m_status = std::to_string(count) + (count == 1 ? " item selected" : " items selected");
 }
 
 bool Editor::cancelTool()

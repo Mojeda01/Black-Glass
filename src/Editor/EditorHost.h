@@ -30,6 +30,8 @@ public:
     virtual void frameAll() = 0;
     virtual void deleteSelection() = 0;
     virtual void selectAll() = 0;
+    virtual bool emptySpaceUnderCursor() const = 0;
+    virtual int selectInRect(const glm::vec2& rectMin, const glm::vec2& rectMax, bool additive) = 0;
     virtual void cancelPlacement() = 0;
     virtual bool viewInfo(ViewInfo& view) const = 0;
     virtual bool pickSurface(const glm::vec3& origin, const glm::vec3& direction, SurfaceHit& hit) const = 0;
@@ -39,6 +41,7 @@ public:
     virtual glm::vec3 spawnPoint() const = 0;
 
     virtual LevelData captureLevel() const = 0;
+    virtual LevelData captureSelection() const = 0;
     virtual void applyEnvironment(const LevelData& level) = 0;
     virtual void clearLevel() = 0;
     virtual bool spawnBrush(const LevelBrush& brush, bool select) = 0;
@@ -57,5 +60,6 @@ public:
     virtual void snapSelectedToGrid(float grid) = 0;
     virtual void setVerticalSnap(float grid) = 0;
     virtual void rotateSelected(float degrees) = 0;
+    virtual void translateSelected(const glm::vec3& delta) = 0;
     virtual bool rotationFrame(glm::vec3& center, float& radius) const = 0;
 };

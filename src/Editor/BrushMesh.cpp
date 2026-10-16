@@ -7,6 +7,9 @@
 namespace
 {
     const int MAX_STEPS = 64;
+    const int MIN_SIDES = 3;
+    const int MAX_SIDES = 48;
+    const float TWO_PI = 6.28318530717959f;
 
     void addPolygon(MeshData& mesh, const std::vector<glm::vec3>& points, const glm::vec3& normal)
     {
@@ -63,6 +66,84 @@ namespace
         addPolygon(mesh, { { 0.5f, 0.0f, -0.5f }, { 0.5f, 0.0f, 0.5f }, { 0.5f, 1.0f, 0.5f } }, { 1.0f, 0.0f, 0.0f });
     }
 
+    void addSmoothQuad(MeshData& mesh, const glm::vec3 (&points)[4], const glm::vec3 (&normals)[4], float width)
+    {
+        glm::vec3 tangent = glm::normalize(points[1] - points[0]);
+        glm::vec3 faceNormal = glm::normalize(normals[0] + normals[1]);
+
+        uint32_t base = static_cast<uint32_t>(mesh.vertices.size());
+        const float u[4] = { 0.0f, width, width, 0.0f };
+        for (int i = 0; i < 4; i++)
+        {
+            Vertex v{};
+            v.pos = points[i];
+            v.color = glm::vec3(1.0f);
+            v.texCoord = glm::vec2(u[i], -points[i].y);
+            v.normal = normals[i];
+            v.tangent = glm::vec4(tangent, 1.0f);
+            mesh.vertices.push_back(v);
+        }
+
+        glm::vec3 geometric = glm::cross(points[1] - points[0], points[2] - points[0]);
+        bool forward = glm::dot(geometric, faceNormal) >= 0.0f;
+        const uint32_t order[6] = { 0, 1, 2, 0, 2, 3 };
+        const uint32_t reversed[6] = { 0, 2, 1, 0, 3, 2 };
+        for (int i = 0; i < 6; i++)
+        {
+            mesh.indices.push_back(base + (forward ? order[i] : reversed[i]));
+        }
+    }
+
+    void buildWedge(MeshData& mesh)
+    {
+        const glm::vec3 a0(-0.5f, 0.0f, -0.5f);
+        const glm::vec3 b0(0.5f, 0.0f, -0.5f);
+        const glm::vec3 c0(-0.5f, 0.0f, 0.5f);
+        const glm::vec3 a1(-0.5f, 1.0f, -0.5f);
+        const glm::vec3 b1(0.5f, 1.0f, -0.5f);
+        const glm::vec3 c1(-0.5f, 1.0f, 0.5f);
+
+        addPolygon(mesh, { a0, b0, c0 }, { 0.0f, -1.0f, 0.0f });
+        addPolygon(mesh, { a1, b1, c1 }, { 0.0f, 1.0f, 0.0f });
+        addPolygon(mesh, { a0, b0, b1, a1 }, { 0.0f, 0.0f, -1.0f });
+        addPolygon(mesh, { a0, c0, c1, a1 }, { -1.0f, 0.0f, 0.0f });
+        addPolygon(mesh, { b0, c0, c1, b1 }, glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f)));
+    }
+
+    void buildCylinder(MeshData& mesh, int sides)
+    {
+        const float n = static_cast<float>(sides);
+        std::vector<glm::vec3> bottom;
+        std::vector<glm::vec3> top;
+        for (int i = 0; i < sides; i++)
+        {
+            float angle = TWO_PI * static_cast<float>(i) / n;
+            float x = std::cos(angle) * 0.5f;
+            float z = std::sin(angle) * 0.5f;
+            bottom.push_back({ x, 0.0f, z });
+            top.push_back({ x, 1.0f, z });
+        }
+
+        std::vector<glm::vec3> capTop = top;
+        std::reverse(capTop.begin(), capTop.end());
+        addPolygon(mesh, capTop, { 0.0f, 1.0f, 0.0f });
+        addPolygon(mesh, bottom, { 0.0f, -1.0f, 0.0f });
+
+        const float arc = TWO_PI * 0.5f / n;
+        for (int i = 0; i < sides; i++)
+        {
+            int j = (i + 1) % sides;
+            float angleA = TWO_PI * static_cast<float>(i) / n;
+            float angleB = TWO_PI * static_cast<float>(i + 1) / n;
+            glm::vec3 normalA(std::cos(angleA), 0.0f, std::sin(angleA));
+            glm::vec3 normalB(std::cos(angleB), 0.0f, std::sin(angleB));
+
+            const glm::vec3 points[4] = { bottom[i], bottom[j], top[j], top[i] };
+            const glm::vec3 normals[4] = { normalA, normalB, normalB, normalA };
+            addSmoothQuad(mesh, points, normals, arc * 2.0f);
+        }
+    }
+
     void buildStairs(MeshData& mesh, int steps)
     {
         const float n = static_cast<float>(steps);
@@ -98,6 +179,12 @@ MeshData buildBrushMesh(const BrushDef& def, const ImageData* texture)
             break;
         case BrushShape::Stairs:
             buildStairs(mesh, std::clamp(def.steps, 1, MAX_STEPS));
+            break;
+        case BrushShape::Wedge:
+            buildWedge(mesh);
+            break;
+        case BrushShape::Cylinder:
+            buildCylinder(mesh, std::clamp(def.steps, MIN_SIDES, MAX_SIDES));
             break;
     }
 
@@ -241,6 +328,47 @@ void drawBrushOutline(const BrushDef& def, const glm::mat4& unitTransform, Debug
             }
             debug.line(point(-0.5f, 0.0f, -0.5f), point(0.5f, 0.0f, -0.5f), color, overlay);
             debug.line(point(-0.5f, 0.0f, 0.5f), point(0.5f, 0.0f, 0.5f), color, overlay);
+            break;
+        }
+        case BrushShape::Wedge:
+        {
+            glm::vec3 a0 = point(-0.5f, 0.0f, -0.5f);
+            glm::vec3 b0 = point(0.5f, 0.0f, -0.5f);
+            glm::vec3 c0 = point(-0.5f, 0.0f, 0.5f);
+            glm::vec3 a1 = point(-0.5f, 1.0f, -0.5f);
+            glm::vec3 b1 = point(0.5f, 1.0f, -0.5f);
+            glm::vec3 c1 = point(-0.5f, 1.0f, 0.5f);
+
+            debug.line(a0, b0, color, overlay);
+            debug.line(b0, c0, color, overlay);
+            debug.line(c0, a0, color, overlay);
+            debug.line(a1, b1, color, overlay);
+            debug.line(b1, c1, color, overlay);
+            debug.line(c1, a1, color, overlay);
+            debug.line(a0, a1, color, overlay);
+            debug.line(b0, b1, color, overlay);
+            debug.line(c0, c1, color, overlay);
+            break;
+        }
+        case BrushShape::Cylinder:
+        {
+            const int sides = std::clamp(def.steps, MIN_SIDES, MAX_SIDES);
+            glm::vec3 previousBottom = point(0.5f, 0.0f, 0.0f);
+            glm::vec3 previousTop = point(0.5f, 1.0f, 0.0f);
+            for (int i = 1; i <= sides; i++)
+            {
+                float angle = TWO_PI * static_cast<float>(i) / static_cast<float>(sides);
+                glm::vec3 nextBottom = point(std::cos(angle) * 0.5f, 0.0f, std::sin(angle) * 0.5f);
+                glm::vec3 nextTop = point(std::cos(angle) * 0.5f, 1.0f, std::sin(angle) * 0.5f);
+                debug.line(previousBottom, nextBottom, color, overlay);
+                debug.line(previousTop, nextTop, color, overlay);
+                if (i % std::max(sides / 4, 1) == 0)
+                {
+                    debug.line(nextBottom, nextTop, color, overlay);
+                }
+                previousBottom = nextBottom;
+                previousTop = nextTop;
+            }
             break;
         }
     }

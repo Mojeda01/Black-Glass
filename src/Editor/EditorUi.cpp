@@ -53,6 +53,8 @@ namespace
             case ItemKind::Box: return "BOX";
             case ItemKind::Ramp: return "RAMP";
             case ItemKind::Stairs: return "STAIRS";
+            case ItemKind::Wedge: return "WEDGE";
+            case ItemKind::Cylinder: return "CYLINDER";
             case ItemKind::Model: return "MODEL";
             case ItemKind::Light: return "LIGHT";
             case ItemKind::Spawn: return "SPAWN";
@@ -128,6 +130,18 @@ void Editor::drawEditMenu()
 
     ImGui::Separator();
     bool hasSelection = m_host.selectionCount() > 0;
+    if (ImGui::MenuItem("Cut", "Cmd/Ctrl+X", false, hasSelection))
+    {
+        execute(EditorCommand::Cut);
+    }
+    if (ImGui::MenuItem("Copy", "Cmd/Ctrl+C", false, hasSelection))
+    {
+        execute(EditorCommand::Copy);
+    }
+    if (ImGui::MenuItem("Paste", "Cmd/Ctrl+V", false, !clipboardEmpty()))
+    {
+        execute(EditorCommand::Paste);
+    }
     if (ImGui::MenuItem("Duplicate", "Cmd/Ctrl+D", false, hasSelection))
     {
         execute(EditorCommand::Duplicate);
@@ -164,6 +178,14 @@ void Editor::drawAddMenu()
     {
         addBrush(BrushShape::Stairs);
     }
+    if (ImGui::MenuItem("Wedge"))
+    {
+        addBrush(BrushShape::Wedge);
+    }
+    if (ImGui::MenuItem("Cylinder"))
+    {
+        addBrush(BrushShape::Cylinder);
+    }
     if (ImGui::MenuItem("Light", "L"))
     {
         addLight();
@@ -183,6 +205,7 @@ void Editor::drawViewMenu()
     ImGui::Separator();
     ImGui::MenuItem("Grid", "G", &m_showGrid);
     ImGui::MenuItem("Selection outline", nullptr, &m_showSelection);
+    ImGui::MenuItem("Move gizmo", "T", &m_showMoveGizmo);
     if (ImGui::MenuItem("Light markers", nullptr, &m_showLightMarkers))
     {
         m_host.setLightMarkersVisible(m_showLightMarkers);
@@ -326,6 +349,11 @@ void Editor::drawToolsPanel()
     {
         ImGui::SliderInt("Steps", &m_newBrush.steps, 1, 32);
     }
+    else if (m_newBrush.shape == BrushShape::Cylinder)
+    {
+        m_newBrush.steps = std::clamp(m_newBrush.steps, 3, 48);
+        ImGui::SliderInt("Sides", &m_newBrush.steps, 3, 48);
+    }
     ImGui::DragFloat3("Size##new", &m_newBrush.size.x, 0.05f, 0.05f, 1000.0f, "%.2f");
     hint("Size used by the Add buttons. The Draw tool takes its size from your drag");
     ImGui::ColorEdit3("Color##new", &m_newBrush.color.x);
@@ -349,6 +377,17 @@ void Editor::drawToolsPanel()
         addBrush(BrushShape::Stairs);
     }
     hint("Create a brush with these settings where the camera is looking");
+    if (ImGui::Button("+ Wedge", ImVec2(half, 0.0f)))
+    {
+        addBrush(BrushShape::Wedge);
+    }
+    hint("Triangular prism, useful for corners and diagonal cuts");
+    ImGui::SameLine();
+    if (ImGui::Button("+ Cylinder", ImVec2(half, 0.0f)))
+    {
+        addBrush(BrushShape::Cylinder);
+    }
+    hint("Round column. Sides are set with the slider above");
 }
 
 void Editor::drawOutlinerPanel()
@@ -498,6 +537,8 @@ void Editor::drawInspectorPanel()
         int boxes = 0;
         int ramps = 0;
         int stairs = 0;
+        int wedges = 0;
+        int cylinders = 0;
         int models = 0;
         int lights = 0;
         for (const ItemInfo& item : m_items)
@@ -507,6 +548,8 @@ void Editor::drawInspectorPanel()
                 case ItemKind::Box: boxes++; break;
                 case ItemKind::Ramp: ramps++; break;
                 case ItemKind::Stairs: stairs++; break;
+                case ItemKind::Wedge: wedges++; break;
+                case ItemKind::Cylinder: cylinders++; break;
                 case ItemKind::Model: models++; break;
                 case ItemKind::Light: lights++; break;
                 case ItemKind::Spawn: break;
@@ -515,6 +558,7 @@ void Editor::drawInspectorPanel()
 
         ImGui::SeparatorText("Level");
         ImGui::Text("%d boxes, %d ramps, %d stairs", boxes, ramps, stairs);
+        ImGui::Text("%d wedges, %d cylinders", wedges, cylinders);
         ImGui::Text("%d models, %d lights", models, lights);
         return;
     }
@@ -617,7 +661,8 @@ void Editor::drawInspectorPanel()
         m_host.setPrimaryTransform(position, yaw, scale);
     }
 
-    if (info.kind == ItemKind::Box || info.kind == ItemKind::Ramp || info.kind == ItemKind::Stairs)
+    if (info.kind == ItemKind::Box || info.kind == ItemKind::Ramp || info.kind == ItemKind::Stairs ||
+        info.kind == ItemKind::Wedge || info.kind == ItemKind::Cylinder)
     {
         ImGui::SeparatorText("Brush");
         if (BrushDef* brush = m_host.selectedBrush())
@@ -720,6 +765,11 @@ void Editor::drawBrushProperties(BrushDef& brush)
     if (brush.shape == BrushShape::Stairs)
     {
         changed |= ImGui::SliderInt("Steps##selected", &brush.steps, 1, 32);
+    }
+    else if (brush.shape == BrushShape::Cylinder)
+    {
+        brush.steps = std::clamp(brush.steps, 3, 48);
+        changed |= ImGui::SliderInt("Sides##selected", &brush.steps, 3, 48);
     }
     changed |= ImGui::DragFloat3("Size##selected", &brush.size.x, 0.05f, 0.05f, 1000.0f, "%.2f");
     changed |= ImGui::ColorEdit3("Color##selected", &brush.color.x);

@@ -74,6 +74,7 @@ add_library(black_glass_engine STATIC
     Editor/BrushTool.cpp
     Editor/BrushHandles.cpp
     Editor/RotationGizmo.cpp
+    Editor/TranslateGizmo.cpp
     Editor/BrushMesh.cpp
     Editor/ProceduralTextures.cpp
     Editor/LevelIO.cpp

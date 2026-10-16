@@ -10,6 +10,8 @@ enum class ItemKind
     Box,
     Ramp,
     Stairs,
+    Wedge,
+    Cylinder,
     Model,
     Light,
     Spawn

@@ -102,7 +102,7 @@ void BrushTool::onRelease()
 
 float BrushTool::directionYaw() const
 {
-    if (m_def.shape == BrushShape::Box)
+    if (m_def.shape == BrushShape::Box || m_def.shape == BrushShape::Cylinder)
     {
         return 0.0f;
     }
@@ -171,7 +171,7 @@ void BrushTool::drawPreview(DebugDraw& debug, float height) const
     debug.line(c, d, FOOTPRINT_COLOR, true);
     debug.line(d, a, FOOTPRINT_COLOR, true);
 
-    if (m_def.shape != BrushShape::Box)
+    if (m_def.shape != BrushShape::Box && m_def.shape != BrushShape::Cylinder)
     {
         glm::vec3 forward(std::sin(yaw), 0.0f, std::cos(yaw));
         glm::vec3 side(forward.z, 0.0f, -forward.x);

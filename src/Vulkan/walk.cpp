@@ -118,6 +118,34 @@ void BlackGlass::buildCollision()
             }
             break;
         }
+        case BrushShape::Wedge:
+        {
+            constexpr int SLICES = 8;
+            float depth = size.z / static_cast<float>(SLICES);
+            for (int i = 0; i < SLICES; i++)
+            {
+                float z0 = -halfZ + depth * static_cast<float>(i);
+                float middle = (z0 + depth * 0.5f) / std::max(size.z, 1e-4f);
+                float maxX = std::clamp(-middle, -0.5f, 0.5f) * size.x;
+                m_collision.push_back(makePiece(model->position, model->yawDegrees,
+                                                glm::vec2(-halfX, z0), glm::vec2(maxX, z0 + depth), size.y, 0.0f));
+            }
+            break;
+        }
+        case BrushShape::Cylinder:
+        {
+            constexpr int SLICES = 8;
+            float depth = size.z / static_cast<float>(SLICES);
+            for (int i = 0; i < SLICES; i++)
+            {
+                float z0 = -halfZ + depth * static_cast<float>(i);
+                float middle = (z0 + depth * 0.5f) / std::max(halfZ, 1e-4f);
+                float reach = halfX * std::sqrt(std::max(1.0f - middle * middle, 0.0f));
+                m_collision.push_back(makePiece(model->position, model->yawDegrees,
+                                                glm::vec2(-reach, z0), glm::vec2(reach, z0 + depth), size.y, 0.0f));
+            }
+            break;
+        }
         }
     }
 }

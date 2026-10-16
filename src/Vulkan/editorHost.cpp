@@ -26,7 +26,7 @@ namespace
         {
             return false;
         }
-        return a.shape != BrushShape::Stairs || a.steps == b.steps;
+        return (a.shape != BrushShape::Stairs && a.shape != BrushShape::Cylinder) || a.steps == b.steps;
     }
 
     bool sameMaterial(const BrushDef& a, const BrushDef& b)
@@ -285,6 +285,79 @@ public:
         }
     }
 
+    bool emptySpaceUnderCursor() const override
+    {
+        if (m_engine.m_ghost || m_engine.m_mouseCaptured)
+        {
+            return false;
+        }
+        glm::vec3 origin;
+        glm::vec3 direction;
+        if (!m_engine.cursorRay(origin, direction))
+        {
+            return false;
+        }
+        float distance = 0.0f;
+        return m_engine.pickModel(origin, direction, distance) == nullptr;
+    }
+
+    int selectInRect(const glm::vec2& rectMin, const glm::vec2& rectMax, bool additive) override
+    {
+        ViewInfo view;
+        if (!viewInfo(view))
+        {
+            return 0;
+        }
+
+        if (!additive)
+        {
+            m_engine.clearSelection();
+        }
+
+        int added = 0;
+        for (const auto& model : m_engine.M_MODELS)
+        {
+            if (model->ghost || model->isGround || !model->visible || model->locked || !model->asset)
+            {
+                continue;
+            }
+
+            glm::vec2 lo(std::numeric_limits<float>::max());
+            glm::vec2 hi(std::numeric_limits<float>::lowest());
+            bool behind = false;
+            for (int corner = 0; corner < 8; corner++)
+            {
+                glm::vec3 point((corner & 1) ? model->worldMax.x : model->worldMin.x,
+                                (corner & 2) ? model->worldMax.y : model->worldMin.y,
+                                (corner & 4) ? model->worldMax.z : model->worldMin.z);
+                glm::vec2 screen;
+                if (!projectPoint(view, point, screen))
+                {
+                    behind = true;
+                    break;
+                }
+                lo = glm::min(lo, screen);
+                hi = glm::max(hi, screen);
+            }
+            if (behind)
+            {
+                continue;
+            }
+
+            glm::vec2 middle = (lo + hi) * 0.5f;
+            if (middle.x < rectMin.x || middle.x > rectMax.x || middle.y < rectMin.y || middle.y > rectMax.y)
+            {
+                continue;
+            }
+            if (!m_engine.isSelected(model.get()))
+            {
+                added++;
+            }
+            m_engine.addToSelection(model.get());
+        }
+        return added;
+    }
+
     void cancelPlacement() override
     {
         m_engine.cancelPlacement();
@@ -527,12 +600,26 @@ public:
 
     LevelData captureLevel() const override
     {
+        return buildLevel(false);
+    }
+
+    LevelData captureSelection() const override
+    {
+        return buildLevel(true);
+    }
+
+    LevelData buildLevel(bool selectedOnly) const
+    {
         LevelData level;
         std::filesystem::path root(assetRoot());
 
         for (const auto& model : m_engine.M_MODELS)
         {
             if (model->ghost || model->isGround || !model->asset)
+            {
+                continue;
+            }
+            if (selectedOnly && !m_engine.isSelected(model.get()))
             {
                 continue;
             }
@@ -586,6 +673,11 @@ public:
                 entry.solid = model->solid;
                 level.models.push_back(entry);
             }
+        }
+
+        if (selectedOnly)
+        {
+            return level;
         }
 
         level.hasSettings = true;
@@ -1005,6 +1097,25 @@ public:
         m_engine.deferShadowUpdate();
     }
 
+    void translateSelected(const glm::vec3& delta) override
+    {
+        bool moved = false;
+        for (Model* model : m_engine.m_selection)
+        {
+            if (model->locked || model->ghost)
+            {
+                continue;
+            }
+            model->position += delta;
+            m_engine.updateModelTransform(*model);
+            moved = true;
+        }
+        if (moved)
+        {
+            m_engine.deferShadowUpdate();
+        }
+    }
+
     bool rotationFrame(glm::vec3& center, float& radius) const override
     {
         glm::vec3 sum(0.0f);
@@ -1121,6 +1232,8 @@ private:
                 case BrushShape::Box: info.kind = ItemKind::Box; break;
                 case BrushShape::Ramp: info.kind = ItemKind::Ramp; break;
                 case BrushShape::Stairs: info.kind = ItemKind::Stairs; break;
+                case BrushShape::Wedge: info.kind = ItemKind::Wedge; break;
+                case BrushShape::Cylinder: info.kind = ItemKind::Cylinder; break;
             }
         }
         else
@@ -1132,7 +1245,7 @@ private:
 
     const MeshData& unitMesh(const BrushDef& def) const
     {
-        int steps = def.shape == BrushShape::Stairs ? def.steps : 0;
+        int steps = (def.shape == BrushShape::Stairs || def.shape == BrushShape::Cylinder) ? def.steps : 0;
         auto key = std::make_pair(static_cast<int>(def.shape), steps);
         auto found = m_unitMeshes.find(key);
         if (found == m_unitMeshes.end())
@@ -1290,6 +1403,12 @@ bool BlackGlass::handleEditorKey(int key, int mods, bool repeat)
             return m_editor->execute(EditorCommand::Redo);
         case GLFW_KEY_D:
             return repeat || m_editor->execute(EditorCommand::Duplicate);
+        case GLFW_KEY_C:
+            return repeat || m_editor->execute(EditorCommand::Copy);
+        case GLFW_KEY_X:
+            return repeat || m_editor->execute(EditorCommand::Cut);
+        case GLFW_KEY_V:
+            return repeat || m_editor->execute(EditorCommand::Paste);
         case GLFW_KEY_A:
             return m_editor->execute(EditorCommand::SelectAll);
         case GLFW_KEY_S:
@@ -1312,6 +1431,8 @@ bool BlackGlass::handleEditorKey(int key, int mods, bool repeat)
         return m_editor->execute(EditorCommand::ToggleGrid);
     case GLFW_KEY_R:
         return m_editor->execute(EditorCommand::Rotate);
+    case GLFW_KEY_T:
+        return m_editor->execute(EditorCommand::ToggleMoveGizmo);
     case GLFW_KEY_L:
         return m_editor->execute(EditorCommand::AddLight);
     case GLFW_KEY_V:
