@@ -30,6 +30,7 @@ struct ItemInfo
     float yawDegrees = 0.0f;
     float scale = 1.0f;
     glm::vec3 nativeSize{ 0.0f };
+    int group = 0;
 };
 
 struct ViewInfo

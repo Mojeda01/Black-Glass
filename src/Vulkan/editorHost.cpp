@@ -256,6 +256,11 @@ public:
 
         glm::vec3 center = (lo + hi) * 0.5f;
         float radius = std::max(0.5f * glm::length(hi - lo), 0.5f);
+        if (m_engine.m_orthoMode != 0)
+        {
+            m_engine.fitOrtho(center, radius);
+            return;
+        }
         float aspect = m_engine.M_SWAPCHAINEXTENT.width / static_cast<float>(std::max(m_engine.M_SWAPCHAINEXTENT.height, 1u));
         float halfVertical = glm::radians(m_engine.m_fov) * 0.5f;
         float halfHorizontal = std::atan(std::tan(halfVertical) * aspect);
@@ -283,6 +288,31 @@ public:
                 m_engine.addToSelection(model.get());
             }
         }
+    }
+
+    int viewMode() const override
+    {
+        return m_engine.m_orthoMode;
+    }
+
+    void setViewMode(int mode) override
+    {
+        m_engine.setOrthoView(mode);
+    }
+
+    int groupSelection() override
+    {
+        return m_engine.groupSelection();
+    }
+
+    int ungroupSelection() override
+    {
+        return m_engine.ungroupSelection();
+    }
+
+    int allocateGroup() override
+    {
+        return m_engine.allocateGroup();
     }
 
     bool emptySpaceUnderCursor() const override
@@ -355,6 +385,7 @@ public:
             }
             m_engine.addToSelection(model.get());
         }
+        m_engine.expandGroups();
         return added;
     }
 
@@ -379,7 +410,7 @@ public:
         glfwGetCursorPos(m_engine.m_window, &cursorX, &cursorY);
 
         glm::mat4 projection = glm::perspective(
-            glm::radians(m_engine.m_fov),
+            glm::radians(m_engine.activeFov()),
             m_engine.M_SWAPCHAINEXTENT.width / static_cast<float>(std::max(m_engine.M_SWAPCHAINEXTENT.height, 1u)),
             0.1f, 1000.0f);
         projection[1][1] *= -1;
@@ -388,6 +419,11 @@ public:
         view.windowSize = glm::vec2(static_cast<float>(width), static_cast<float>(height));
         view.cursor = glm::vec2(static_cast<float>(cursorX), static_cast<float>(cursorY));
         view.cameraPos = m_engine.m_camera.position;
+        if (m_engine.m_orthoMode != 0)
+        {
+            float equivalent = m_engine.m_orthoSize / std::tan(glm::radians(m_engine.m_fov) * 0.5f);
+            view.cameraPos = m_engine.m_orthoTarget - m_engine.m_camera.front() * equivalent;
+        }
         view.valid = true;
         return true;
     }
@@ -575,6 +611,11 @@ public:
 
     glm::vec3 spawnPoint() const override
     {
+        if (m_engine.m_orthoMode != 0)
+        {
+            return glm::vec3(m_engine.m_orthoTarget.x, 0.0f, m_engine.m_orthoTarget.z);
+        }
+
         const glm::vec3 origin = m_engine.m_camera.position;
         const glm::vec3 direction = m_engine.m_camera.front();
 
@@ -630,9 +671,11 @@ public:
                 light.name = model->name;
                 light.def = *model->light;
                 light.position = model->position;
+                light.yawDegrees = model->yawDegrees;
                 light.selected = m_engine.isSelected(model.get());
                 light.hidden = model->hidden;
                 light.locked = model->locked;
+                light.group = model->group;
                 level.lights.push_back(light);
             }
             else if (model->spawn)
@@ -644,6 +687,7 @@ public:
                 spawn.selected = m_engine.isSelected(model.get());
                 spawn.hidden = model->hidden;
                 spawn.locked = model->locked;
+                spawn.group = model->group;
                 level.spawns.push_back(spawn);
             }
             else if (model->brush)
@@ -657,6 +701,7 @@ public:
                 brush.selected = m_engine.isSelected(model.get());
                 brush.hidden = model->hidden;
                 brush.locked = model->locked;
+                brush.group = model->group;
                 level.brushes.push_back(brush);
             }
             else
@@ -671,6 +716,7 @@ public:
                 entry.hidden = model->hidden;
                 entry.locked = model->locked;
                 entry.solid = model->solid;
+                entry.group = model->group;
                 level.models.push_back(entry);
             }
         }
@@ -683,9 +729,18 @@ public:
         level.hasSettings = true;
         level.settings = m_engine.m_settings;
         level.hasCamera = true;
-        level.camera.position = m_engine.m_camera.position;
-        level.camera.yaw = m_engine.m_camera.yaw;
-        level.camera.pitch = m_engine.m_camera.pitch;
+        if (m_engine.m_orthoMode != 0)
+        {
+            level.camera.position = m_engine.m_orthoSavedPosition;
+            level.camera.yaw = m_engine.m_orthoSavedYaw;
+            level.camera.pitch = m_engine.m_orthoSavedPitch;
+        }
+        else
+        {
+            level.camera.position = m_engine.m_camera.position;
+            level.camera.yaw = m_engine.m_camera.yaw;
+            level.camera.pitch = m_engine.m_camera.pitch;
+        }
         return level;
     }
 
@@ -698,6 +753,7 @@ public:
         }
         if (level.hasCamera)
         {
+            m_engine.setOrthoView(0);
             m_engine.m_camera.position = level.camera.position;
             m_engine.m_camera.yaw = level.camera.yaw;
             m_engine.m_camera.pitch = level.camera.pitch;
@@ -724,6 +780,8 @@ public:
                 return false;
             }
             model->name = brush.name;
+            model->group = brush.group;
+            m_engine.noteGroup(brush.group);
             model->brush = brush.def;
             model->position = brush.position;
             model->yawDegrees = brush.yawDegrees;
@@ -783,6 +841,8 @@ public:
         model->hidden = entry.hidden;
         model->locked = entry.locked;
         model->solid = entry.solid;
+        model->group = entry.group;
+        m_engine.noteGroup(entry.group);
         refreshVisibility(*model);
         m_engine.updateModelTransform(*model);
         m_engine.m_shadowDirty = true;
@@ -804,8 +864,11 @@ public:
                 return false;
             }
             model->name = light.name;
+            model->group = light.group;
+            m_engine.noteGroup(light.group);
             model->light = light.def;
             model->position = light.position;
+            model->yawDegrees = light.yawDegrees;
             model->hidden = light.hidden;
             model->locked = light.locked;
             refreshVisibility(*model);
@@ -835,6 +898,8 @@ public:
                 return false;
             }
             model->name = spawn.name;
+            model->group = spawn.group;
+            m_engine.noteGroup(spawn.group);
             model->spawn = true;
             model->position = spawn.position;
             model->yawDegrees = spawn.yawDegrees;
@@ -883,6 +948,67 @@ public:
             debug().line(tip, tip - forward * 0.25f + side * 0.15f, color, true);
             debug().line(tip, tip - forward * 0.25f - side * 0.15f, color, true);
             debug().line(base, base + glm::vec3(0.0f, 1.8f, 0.0f), glm::vec4(0.3f, 1.0f, 0.4f, 0.5f), true);
+        }
+    }
+
+    void drawLightCones() override
+    {
+        constexpr int SEGMENTS = 24;
+        constexpr float TWO_PI = 6.28318530717959f;
+
+        for (const auto& model : m_engine.M_MODELS)
+        {
+            if (!model->light || !model->light->spot || !model->visible || model->ghost)
+            {
+                continue;
+            }
+
+            const LightDef& def = *model->light;
+            glm::vec3 origin = (model->worldMin + model->worldMax) * 0.5f;
+            float yaw = glm::radians(model->yawDegrees);
+            float pitch = glm::radians(def.pitch);
+            glm::vec3 direction(std::sin(yaw) * std::cos(pitch), std::sin(pitch), std::cos(yaw) * std::cos(pitch));
+            direction = glm::normalize(direction);
+
+            float length = std::min(def.radius, 4.0f);
+            float outer = glm::radians(std::clamp(def.outerAngle, 1.0f, 89.0f));
+            float inner = glm::radians(std::clamp(def.innerAngle, 0.0f, 88.5f));
+            glm::vec3 helper = std::abs(direction.y) > 0.99f ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+            glm::vec3 right = glm::normalize(glm::cross(direction, helper));
+            glm::vec3 up = glm::cross(right, direction);
+
+            bool selected = m_engine.isSelected(model.get());
+            glm::vec4 color = selected ? glm::vec4(1.0f, 0.75f, 0.2f, 1.0f) : glm::vec4(1.0f, 0.9f, 0.5f, 0.45f);
+
+            auto ring = [&](float angle, const glm::vec4& ringColor)
+            {
+                glm::vec3 center = origin + direction * (length * std::cos(angle));
+                float radius = length * std::sin(angle);
+                glm::vec3 previous = center + right * radius;
+                for (int i = 1; i <= SEGMENTS; i++)
+                {
+                    float a = TWO_PI * static_cast<float>(i) / static_cast<float>(SEGMENTS);
+                    glm::vec3 point = center + (right * std::cos(a) + up * std::sin(a)) * radius;
+                    debug().line(previous, point, ringColor, true);
+                    previous = point;
+                }
+            };
+
+            ring(outer, color);
+            if (inner > 0.01f)
+            {
+                glm::vec4 core = color;
+                core.a *= 0.6f;
+                ring(inner, core);
+            }
+
+            glm::vec3 rim = origin + direction * (length * std::cos(outer));
+            float rimRadius = length * std::sin(outer);
+            debug().line(origin, rim + right * rimRadius, color, true);
+            debug().line(origin, rim - right * rimRadius, color, true);
+            debug().line(origin, rim + up * rimRadius, color, true);
+            debug().line(origin, rim - up * rimRadius, color, true);
+            debug().line(origin, origin + direction * length, color, true);
         }
     }
 
@@ -1016,6 +1142,21 @@ public:
         m_engine.clearSelection();
         bool created = false;
 
+        std::map<int, int> groupMap;
+        auto remap = [&](int group)
+        {
+            if (group == 0)
+            {
+                return 0;
+            }
+            auto found = groupMap.find(group);
+            if (found == groupMap.end())
+            {
+                found = groupMap.emplace(group, m_engine.allocateGroup()).first;
+            }
+            return found->second;
+        };
+
         for (Model* source : sources)
         {
             if (!source || source->ghost || !source->asset)
@@ -1029,6 +1170,7 @@ public:
                 copy.name = source->name + " copy";
                 copy.position = source->position + offset;
                 copy.yawDegrees = source->yawDegrees;
+                copy.group = remap(source->group);
                 created |= spawnSpawn(copy, true);
                 continue;
             }
@@ -1039,6 +1181,8 @@ public:
                 copy.name = source->name + " copy";
                 copy.def = *source->light;
                 copy.position = source->position + offset;
+                copy.yawDegrees = source->yawDegrees;
+                copy.group = remap(source->group);
                 created |= spawnLight(copy, true);
                 continue;
             }
@@ -1051,6 +1195,7 @@ public:
                 copy.def.size *= source->scale;
                 copy.position = source->position + offset;
                 copy.yawDegrees = source->yawDegrees;
+                copy.group = remap(source->group);
                 created |= spawnBrush(copy, true);
                 continue;
             }
@@ -1079,6 +1224,7 @@ public:
             model->yawDegrees = source->yawDegrees;
             model->scale = source->scale;
             model->solid = source->solid;
+            model->group = remap(source->group);
             m_engine.updateModelTransform(*model);
             m_engine.m_shadowDirty = true;
             m_engine.addToSelection(model);
@@ -1213,6 +1359,7 @@ private:
         info.position = model.position;
         info.yawDegrees = model.yawDegrees;
         info.scale = model.scale;
+        info.group = model.group;
         info.nativeSize = model.asset ? model.asset->localMax - model.asset->localMin : glm::vec3(0.0f);
 
         info.solid = model.solid;
@@ -1411,6 +1558,8 @@ bool BlackGlass::handleEditorKey(int key, int mods, bool repeat)
             return repeat || m_editor->execute(EditorCommand::Paste);
         case GLFW_KEY_A:
             return m_editor->execute(EditorCommand::SelectAll);
+        case GLFW_KEY_G:
+            return repeat || m_editor->execute(shift ? EditorCommand::Ungroup : EditorCommand::Group);
         case GLFW_KEY_S:
             return repeat || m_editor->execute(EditorCommand::Save);
         default:
@@ -1433,6 +1582,14 @@ bool BlackGlass::handleEditorKey(int key, int mods, bool repeat)
         return m_editor->execute(EditorCommand::Rotate);
     case GLFW_KEY_T:
         return m_editor->execute(EditorCommand::ToggleMoveGizmo);
+    case GLFW_KEY_F3:
+        return m_editor->execute(EditorCommand::ViewTop);
+    case GLFW_KEY_F4:
+        return m_editor->execute(EditorCommand::ViewFront);
+    case GLFW_KEY_F5:
+        return m_editor->execute(EditorCommand::ViewRight);
+    case GLFW_KEY_F6:
+        return m_editor->execute(EditorCommand::ViewPerspective);
     case GLFW_KEY_L:
         return m_editor->execute(EditorCommand::AddLight);
     case GLFW_KEY_V:

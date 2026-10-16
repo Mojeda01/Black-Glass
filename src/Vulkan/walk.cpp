@@ -158,6 +158,10 @@ void BlackGlass::toggleWalkMode(bool fromCamera)
         return;
     }
 
+    if (m_orthoMode != 0)
+    {
+        setOrthoView(0);
+    }
     if (m_editor)
     {
         m_editor->cancelTool();

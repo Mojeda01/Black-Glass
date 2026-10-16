@@ -85,6 +85,7 @@ struct Model
     std::optional<LightDef> light;
     bool spawn = false;
     bool solid = true;
+    int group = 0;
     glm::vec3 worldMin{ 0.0f };
     glm::vec3 worldMax{ 0.0f };
 };
@@ -124,6 +125,7 @@ struct UniformBufferObject
     glm::vec4 lightInfo;
     glm::vec4 lightPositions[MAX_POINT_LIGHTS];
     glm::vec4 lightColors[MAX_POINT_LIGHTS];
+    glm::vec4 lightDirections[MAX_POINT_LIGHTS];
 };
 
 constexpr VkFormat HDR_FORMAT = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -220,6 +222,7 @@ public:
     void exitWalkMode();
     bool walkMode() const { return m_walkMode; }
     Camera& camera() { return m_camera; }
+    int orthoMode() const { return m_orthoMode; }
 private:
     GLFWwindow* m_window = nullptr;
     bool m_framebufferResized = false;
@@ -229,6 +232,21 @@ private:
     bool m_mouseCaptured = false;
     int m_debugView = 0;
     float m_fov = 45.0f;
+    static constexpr float ORTHO_FOV = 5.0f;
+    int m_orthoMode = 0;
+    glm::vec3 m_orthoTarget{ 0.0f };
+    float m_orthoSize = 10.0f;
+    glm::vec3 m_orthoSavedPosition{ 0.0f };
+    float m_orthoSavedYaw = -90.0f;
+    float m_orthoSavedPitch = 0.0f;
+    float activeFov() const;
+    float orthoCameraDistance() const;
+    void applyOrthoCamera();
+    void setOrthoView(int mode);
+    void panOrtho(float deltaX, float deltaY);
+    void zoomOrtho(float notches);
+    void fitOrtho(const glm::vec3& center, float radius);
+    void keyboardOrtho(float deltaTime);
     RenderSettings m_settings;
     bool m_shadowDirty = false;
     bool m_imguiReady = false;
@@ -365,6 +383,7 @@ private:
     std::vector<std::unique_ptr<Model>> M_MODELS;
     std::unique_ptr<Model> M_GROUND;
     Model* m_selected = nullptr;
+    int m_groupCounter = 0;
     std::vector<Model*> m_selection;
     Model* m_ghost = nullptr;
     int m_placingAsset = -1;
@@ -446,6 +465,11 @@ private:
     void selectOnly(Model* model);
     void addToSelection(Model* model);
     void toggleSelection(Model* model);
+    void expandGroups();
+    int groupSelection();
+    int ungroupSelection();
+    int allocateGroup();
+    void noteGroup(int group);
     void rotateSelection(float degrees);
     void removeModel(size_t index);
     void removeAsset(size_t index);

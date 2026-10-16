@@ -9,6 +9,7 @@
 #include <cstring>
 #include <filesystem>
 #include <limits>
+#include <map>
 
 namespace
 {
@@ -28,12 +29,13 @@ void Editor::refreshTextureList()
     m_textureNames = m_host.textureNames();
 }
 
-void Editor::addLight()
+void Editor::addLight(bool spot)
 {
     glm::vec3 point = m_host.spawnPoint();
 
     LevelLight light;
-    light.name = "Light " + std::to_string(m_nextLight++);
+    light.name = std::string(spot ? "Spot " : "Light ") + std::to_string(m_nextLight++);
+    light.def.spot = spot;
     light.position = glm::vec3(std::round(point.x / m_gridSize) * m_gridSize, 2.5f,
                                std::round(point.z / m_gridSize) * m_gridSize);
 
@@ -264,12 +266,28 @@ bool Editor::pasteClipboard()
                     deltaY,
                     std::round((target.z - center.z) / m_gridSize) * m_gridSize);
 
+    std::map<int, int> groupMap;
+    auto remap = [&](int group)
+    {
+        if (group == 0)
+        {
+            return 0;
+        }
+        auto found = groupMap.find(group);
+        if (found == groupMap.end())
+        {
+            found = groupMap.emplace(group, m_host.allocateGroup()).first;
+        }
+        return found->second;
+    };
+
     m_host.clearSelection();
     bool created = false;
     for (LevelBrush item : m_clipboard.brushes)
     {
         item.position += delta;
         item.hidden = false;
+        item.group = remap(item.group);
         created |= m_host.spawnBrush(item, true);
     }
     for (LevelModel item : m_clipboard.models)
@@ -277,18 +295,21 @@ bool Editor::pasteClipboard()
         item.position += delta;
         item.hidden = false;
         item.selected = true;
+        item.group = remap(item.group);
         created |= m_host.spawnModel(item);
     }
     for (LevelLight item : m_clipboard.lights)
     {
         item.position += delta;
         item.hidden = false;
+        item.group = remap(item.group);
         created |= m_host.spawnLight(item, true);
     }
     for (LevelSpawn item : m_clipboard.spawns)
     {
         item.position += delta;
         item.hidden = false;
+        item.group = remap(item.group);
         created |= m_host.spawnSpawn(item, true);
     }
     if (created)
@@ -448,6 +469,10 @@ void Editor::update(bool overlayVisible)
             drawSelection();
         }
         m_host.drawSpawnMarkers();
+        if (m_showLightMarkers)
+        {
+            m_host.drawLightCones();
+        }
     }
 
     trackHistory(overlayVisible);
@@ -582,6 +607,44 @@ bool Editor::execute(EditorCommand command)
         return true;
     case EditorCommand::Paste:
         return pasteClipboard();
+    case EditorCommand::Group:
+    {
+        int count = m_host.groupSelection();
+        if (count == 0)
+        {
+            m_status = "Select at least two unlocked items to group";
+            return false;
+        }
+        m_status = "Grouped " + std::to_string(count) + " items";
+        return true;
+    }
+    case EditorCommand::Ungroup:
+    {
+        int count = m_host.ungroupSelection();
+        if (count == 0)
+        {
+            m_status = "Nothing to ungroup";
+            return false;
+        }
+        m_status = "Ungrouped " + std::to_string(count) + (count == 1 ? " item" : " items");
+        return true;
+    }
+    case EditorCommand::ViewPerspective:
+        m_host.setViewMode(0);
+        m_status = "Perspective view";
+        return true;
+    case EditorCommand::ViewTop:
+        m_host.setViewMode(1);
+        m_status = "Top view. Right-drag or WASD pans, scroll zooms";
+        return true;
+    case EditorCommand::ViewFront:
+        m_host.setViewMode(2);
+        m_status = "Front view. Right-drag or WASD pans, scroll zooms";
+        return true;
+    case EditorCommand::ViewRight:
+        m_host.setViewMode(3);
+        m_status = "Right view. Right-drag or WASD pans, scroll zooms";
+        return true;
     case EditorCommand::SelectAll:
         m_host.selectAll();
         return true;

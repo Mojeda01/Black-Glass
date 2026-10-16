@@ -93,7 +93,7 @@ bool BlackGlass::cursorRay(glm::vec3& origin, glm::vec3& direction) const
     float ndcX = static_cast<float>(cursorX / windowWidth) * 2.0f - 1.0f;
     float ndcY = static_cast<float>(cursorY / windowHeight) * 2.0f - 1.0f;
 
-    glm::mat4 proj = glm::perspective(glm::radians(m_fov),
+    glm::mat4 proj = glm::perspective(glm::radians(activeFov()),
                                       M_SWAPCHAINEXTENT.width / static_cast<float>(M_SWAPCHAINEXTENT.height),
                                       0.1f, 1000.0f);
     proj[1][1] *= -1;
@@ -147,6 +147,89 @@ void BlackGlass::selectOnly(Model* model)
     m_selection.clear();
     m_selected = nullptr;
     addToSelection(model);
+    expandGroups();
+    if (model)
+    {
+        m_selected = model;
+    }
+}
+
+void BlackGlass::expandGroups()
+{
+    Model* primary = m_selected;
+    std::vector<int> groups;
+    for (const Model* model : m_selection)
+    {
+        if (model->group != 0 && std::find(groups.begin(), groups.end(), model->group) == groups.end())
+        {
+            groups.push_back(model->group);
+        }
+    }
+    if (groups.empty())
+    {
+        return;
+    }
+    for (const auto& model : M_MODELS)
+    {
+        if (model->ghost || model->isGround || !model->asset || model->group == 0)
+        {
+            continue;
+        }
+        if (std::find(groups.begin(), groups.end(), model->group) != groups.end())
+        {
+            addToSelection(model.get());
+        }
+    }
+    if (primary)
+    {
+        m_selected = primary;
+    }
+}
+
+int BlackGlass::allocateGroup()
+{
+    return ++m_groupCounter;
+}
+
+void BlackGlass::noteGroup(int group)
+{
+    m_groupCounter = std::max(m_groupCounter, group);
+}
+
+int BlackGlass::groupSelection()
+{
+    std::vector<Model*> members;
+    for (Model* model : m_selection)
+    {
+        if (!model->ghost && !model->locked)
+        {
+            members.push_back(model);
+        }
+    }
+    if (members.size() < 2)
+    {
+        return 0;
+    }
+    int id = allocateGroup();
+    for (Model* model : members)
+    {
+        model->group = id;
+    }
+    return static_cast<int>(members.size());
+}
+
+int BlackGlass::ungroupSelection()
+{
+    int released = 0;
+    for (Model* model : m_selection)
+    {
+        if (model->group != 0 && !model->locked)
+        {
+            model->group = 0;
+            released++;
+        }
+    }
+    return released;
 }
 
 void BlackGlass::addToSelection(Model* model)
@@ -172,6 +255,20 @@ void BlackGlass::toggleSelection(Model* model)
     if (found == m_selection.end())
     {
         addToSelection(model);
+        expandGroups();
+        m_selected = model;
+        return;
+    }
+    if (model->group != 0)
+    {
+        int group = model->group;
+        m_selection.erase(std::remove_if(m_selection.begin(), m_selection.end(),
+                                         [group](const Model* other) { return other->group == group; }),
+                          m_selection.end());
+        if (m_selected && m_selected->group == group)
+        {
+            m_selected = m_selection.empty() ? nullptr : m_selection.back();
+        }
         return;
     }
     m_selection.erase(found);
@@ -478,6 +575,12 @@ void BlackGlass::onScroll(double delta)
             m_ghost->yawDegrees += 360.0f;
         }
         updateModelTransform(*m_ghost);
+        return;
+    }
+
+    if (m_orthoMode != 0)
+    {
+        zoomOrtho(static_cast<float>(delta));
         return;
     }
 

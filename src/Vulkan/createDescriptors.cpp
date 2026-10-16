@@ -141,6 +141,12 @@ void BlackGlass::onMouseMove(double xpos, double ypos)
     m_lastX = xpos;
     m_lastY = ypos;
 
+    if (m_orthoMode != 0)
+    {
+        panOrtho(deltaX, deltaY);
+        return;
+    }
+
     m_camera.processMouse(deltaX, deltaY);
 }
 
@@ -162,14 +168,21 @@ void BlackGlass::updateUniformBuffer(uint32_t currentImage)
     }
     else if (m_mouseCaptured && !m_quitPrompt && !(m_imguiReady && ImGui::GetIO().WantTextInput))
     {
-        m_camera.processKeyboard(m_window, m_deltaTime);
+        if (m_orthoMode != 0)
+        {
+            keyboardOrtho(m_deltaTime);
+        }
+        else
+        {
+            m_camera.processKeyboard(m_window, m_deltaTime);
+        }
     }
 
     UniformBufferObject ubo{};
 
     ubo.view = m_camera.view();
 
-    ubo.proj = glm::perspective(glm::radians(m_fov),
+    ubo.proj = glm::perspective(glm::radians(activeFov()),
                                 M_SWAPCHAINEXTENT.width / static_cast<float>(M_SWAPCHAINEXTENT.height),
                                 0.1f, 1000.0f);
 
@@ -229,6 +242,22 @@ void BlackGlass::updateUniformBuffer(uint32_t currentImage)
         glm::vec3 center = (lightModel->worldMin + lightModel->worldMax) * 0.5f;
         ubo.lightPositions[i] = glm::vec4(center, lightModel->light->radius);
         ubo.lightColors[i] = glm::vec4(lightModel->light->color * lightModel->light->intensity, 0.0f);
+
+        const LightDef& def = *lightModel->light;
+        if (def.spot)
+        {
+            float yaw = glm::radians(lightModel->yawDegrees);
+            float pitch = glm::radians(def.pitch);
+            glm::vec3 direction(std::sin(yaw) * std::cos(pitch), std::sin(pitch), std::cos(yaw) * std::cos(pitch));
+            float outer = std::clamp(def.outerAngle, 1.0f, 89.0f);
+            float inner = std::clamp(def.innerAngle, 0.0f, outer - 0.5f);
+            ubo.lightDirections[i] = glm::vec4(glm::normalize(direction), std::cos(glm::radians(outer)));
+            ubo.lightColors[i].w = std::cos(glm::radians(inner));
+        }
+        else
+        {
+            ubo.lightDirections[i] = glm::vec4(0.0f, -1.0f, 0.0f, -2.0f);
+        }
     }
     ubo.lightInfo = glm::vec4(static_cast<float>(lightCount), 0.0f, 0.0f, 0.0f);
 

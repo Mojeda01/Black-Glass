@@ -218,6 +218,12 @@ void BlackGlass::frameScene()
     glm::vec3 extent = M_SCENEMAX - M_SCENEMIN;
     float radius = std::max(0.5f * glm::length(extent), 0.1f);
 
+    if (m_orthoMode != 0)
+    {
+        fitOrtho(center, radius);
+        return;
+    }
+
     float aspect = M_SWAPCHAINEXTENT.width / static_cast<float>(std::max(M_SWAPCHAINEXTENT.height, 1u));
     float halfVertical = glm::radians(m_fov) * 0.5f;
     float halfHorizontal = std::atan(std::tan(halfVertical) * aspect);

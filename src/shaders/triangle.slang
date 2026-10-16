@@ -17,6 +17,7 @@ struct FrameData {
     float4 lightInfo;
     float4 lightPositions[16];
     float4 lightColors[16];
+    float4 lightDirections[16];
 };
 
 struct MaterialData {
@@ -287,6 +288,15 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
         float ratio = distSq / (lightRadius * lightRadius);
         float window = saturate(1.0 - ratio * ratio);
         float attenuation = window * window / (distSq + 1.0);
+        float4 coneData = frame.lightDirections[li];
+        if (coneData.w > -1.5)
+        {
+            float3 lightToPoint = -toLight * rsqrt(max(distSq, 1e-6));
+            float cosAngle = dot(lightToPoint, coneData.xyz);
+            float cosInner = frame.lightColors[li].w;
+            float cone = saturate((cosAngle - coneData.w) / max(cosInner - coneData.w, 1e-3));
+            attenuation *= cone * cone * (3.0 - 2.0 * cone);
+        }
         if (attenuation > 0.0)
         {
             float3 Lp = toLight * rsqrt(max(distSq, 1e-6));

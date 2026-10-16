@@ -19,6 +19,12 @@ enum class EditorCommand
     Copy,
     Cut,
     Paste,
+    Group,
+    Ungroup,
+    ViewPerspective,
+    ViewTop,
+    ViewFront,
+    ViewRight,
     SelectAll,
     DrawTool,
     SelectTool,
@@ -74,7 +80,7 @@ private:
     bool clipboardEmpty() const;
 
     void addBrush(BrushShape shape);
-    void addLight();
+    void addLight(bool spot = false);
     void addSpawn();
     void newLevel();
     void refreshTextureList();

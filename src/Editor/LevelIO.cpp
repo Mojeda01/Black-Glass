@@ -58,6 +58,10 @@ bool saveLevelFile(const std::string& path, const LevelData& level, std::string&
         {
             entry["locked"] = true;
         }
+        if (brush.group != 0)
+        {
+            entry["group"] = brush.group;
+        }
         brushes.push_back(entry);
     }
     root["brushes"] = brushes;
@@ -83,6 +87,10 @@ bool saveLevelFile(const std::string& path, const LevelData& level, std::string&
         {
             entry["solid"] = false;
         }
+        if (model.group != 0)
+        {
+            entry["group"] = model.group;
+        }
         models.push_back(entry);
     }
     root["models"] = models;
@@ -97,6 +105,17 @@ bool saveLevelFile(const std::string& path, const LevelData& level, std::string&
         entry["intensity"] = light.def.intensity;
         entry["radius"] = light.def.radius;
         entry["enabled"] = light.def.enabled;
+        if (light.def.spot)
+        {
+            entry["spot"] = true;
+            entry["pitch"] = light.def.pitch;
+            entry["innerAngle"] = light.def.innerAngle;
+            entry["outerAngle"] = light.def.outerAngle;
+        }
+        if (light.yawDegrees != 0.0f)
+        {
+            entry["yaw"] = light.yawDegrees;
+        }
         if (light.hidden)
         {
             entry["hidden"] = true;
@@ -104,6 +123,10 @@ bool saveLevelFile(const std::string& path, const LevelData& level, std::string&
         if (light.locked)
         {
             entry["locked"] = true;
+        }
+        if (light.group != 0)
+        {
+            entry["group"] = light.group;
         }
         lights.push_back(entry);
     }
@@ -123,6 +146,10 @@ bool saveLevelFile(const std::string& path, const LevelData& level, std::string&
         if (spawn.locked)
         {
             entry["locked"] = true;
+        }
+        if (spawn.group != 0)
+        {
+            entry["group"] = spawn.group;
         }
         spawns.push_back(entry);
     }
@@ -224,6 +251,7 @@ bool loadLevelFile(const std::string& path, LevelData& level, std::string& error
                 brush.yawDegrees = entry.value("yaw", 0.0f);
                 brush.hidden = entry.value("hidden", false);
                 brush.locked = entry.value("locked", false);
+                brush.group = std::max(entry.value("group", 0), 0);
                 loaded.brushes.push_back(brush);
             }
         }
@@ -241,6 +269,7 @@ bool loadLevelFile(const std::string& path, LevelData& level, std::string& error
                 model.hidden = entry.value("hidden", false);
                 model.locked = entry.value("locked", false);
                 model.solid = entry.value("solid", true);
+                model.group = std::max(entry.value("group", 0), 0);
                 if (!model.asset.empty())
                 {
                     loaded.models.push_back(model);
@@ -259,8 +288,14 @@ bool loadLevelFile(const std::string& path, LevelData& level, std::string& error
                 light.def.intensity = entry.value("intensity", light.def.intensity);
                 light.def.radius = entry.value("radius", light.def.radius);
                 light.def.enabled = entry.value("enabled", light.def.enabled);
+                light.def.spot = entry.value("spot", false);
+                light.def.pitch = std::clamp(entry.value("pitch", light.def.pitch), -90.0f, 90.0f);
+                light.def.innerAngle = std::clamp(entry.value("innerAngle", light.def.innerAngle), 0.0f, 89.0f);
+                light.def.outerAngle = std::clamp(entry.value("outerAngle", light.def.outerAngle), 1.0f, 89.0f);
+                light.yawDegrees = entry.value("yaw", 0.0f);
                 light.hidden = entry.value("hidden", false);
                 light.locked = entry.value("locked", false);
+                light.group = std::max(entry.value("group", 0), 0);
                 loaded.lights.push_back(light);
             }
         }
@@ -275,6 +310,7 @@ bool loadLevelFile(const std::string& path, LevelData& level, std::string& error
                 spawn.yawDegrees = entry.value("yaw", 0.0f);
                 spawn.hidden = entry.value("hidden", false);
                 spawn.locked = entry.value("locked", false);
+                spawn.group = std::max(entry.value("group", 0), 0);
                 loaded.spawns.push_back(spawn);
             }
         }

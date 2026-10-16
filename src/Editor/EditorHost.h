@@ -30,6 +30,11 @@ public:
     virtual void frameAll() = 0;
     virtual void deleteSelection() = 0;
     virtual void selectAll() = 0;
+    virtual int viewMode() const = 0;
+    virtual void setViewMode(int mode) = 0;
+    virtual int groupSelection() = 0;
+    virtual int ungroupSelection() = 0;
+    virtual int allocateGroup() = 0;
     virtual bool emptySpaceUnderCursor() const = 0;
     virtual int selectInRect(const glm::vec2& rectMin, const glm::vec2& rectMax, bool additive) = 0;
     virtual void cancelPlacement() = 0;
@@ -50,6 +55,7 @@ public:
     virtual bool spawnSpawn(const LevelSpawn& spawn, bool select) = 0;
     virtual void setPrimarySolid(bool solid) = 0;
     virtual void drawSpawnMarkers() = 0;
+    virtual void drawLightCones() = 0;
     virtual LightDef* selectedLight() = 0;
     virtual void setLightMarkersVisible(bool visible) = 0;
     virtual std::vector<std::string> textureNames() = 0;

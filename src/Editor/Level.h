@@ -17,6 +17,7 @@ struct LevelBrush
     bool selected = false;
     bool hidden = false;
     bool locked = false;
+    int group = 0;
 };
 
 struct LevelModel
@@ -30,6 +31,7 @@ struct LevelModel
     bool hidden = false;
     bool locked = false;
     bool solid = true;
+    int group = 0;
 };
 
 struct LevelSpawn
@@ -40,6 +42,7 @@ struct LevelSpawn
     bool selected = false;
     bool hidden = false;
     bool locked = false;
+    int group = 0;
 };
 
 struct LevelLight
@@ -47,9 +50,11 @@ struct LevelLight
     std::string name;
     LightDef def;
     glm::vec3 position{ 0.0f };
+    float yawDegrees = 0.0f;
     bool selected = false;
     bool hidden = false;
     bool locked = false;
+    int group = 0;
 };
 
 struct LevelCamera
@@ -87,7 +92,7 @@ inline bool sameContent(const LevelData& a, const LevelData& b)
         const LevelBrush& x = a.brushes[i];
         const LevelBrush& y = b.brushes[i];
         if (x.name != y.name || !(x.def == y.def) || x.position != y.position || x.yawDegrees != y.yawDegrees ||
-            x.hidden != y.hidden || x.locked != y.locked)
+            x.hidden != y.hidden || x.locked != y.locked || x.group != y.group)
         {
             return false;
         }
@@ -96,8 +101,8 @@ inline bool sameContent(const LevelData& a, const LevelData& b)
     {
         const LevelLight& x = a.lights[i];
         const LevelLight& y = b.lights[i];
-        if (x.name != y.name || !(x.def == y.def) || x.position != y.position ||
-            x.hidden != y.hidden || x.locked != y.locked)
+        if (x.name != y.name || !(x.def == y.def) || x.position != y.position || x.yawDegrees != y.yawDegrees ||
+            x.hidden != y.hidden || x.locked != y.locked || x.group != y.group)
         {
             return false;
         }
@@ -107,7 +112,7 @@ inline bool sameContent(const LevelData& a, const LevelData& b)
         const LevelSpawn& x = a.spawns[i];
         const LevelSpawn& y = b.spawns[i];
         if (x.name != y.name || x.position != y.position || x.yawDegrees != y.yawDegrees ||
-            x.hidden != y.hidden || x.locked != y.locked)
+            x.hidden != y.hidden || x.locked != y.locked || x.group != y.group)
         {
             return false;
         }
@@ -118,7 +123,7 @@ inline bool sameContent(const LevelData& a, const LevelData& b)
         const LevelModel& y = b.models[i];
         if (x.name != y.name || x.asset != y.asset || x.position != y.position ||
             x.yawDegrees != y.yawDegrees || x.scale != y.scale ||
-            x.hidden != y.hidden || x.locked != y.locked || x.solid != y.solid)
+            x.hidden != y.hidden || x.locked != y.locked || x.solid != y.solid || x.group != y.group)
         {
             return false;
         }

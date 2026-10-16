@@ -146,6 +146,14 @@ void Editor::drawEditMenu()
     {
         execute(EditorCommand::Duplicate);
     }
+    if (ImGui::MenuItem("Group", "Cmd/Ctrl+G", false, m_host.selectionCount() > 1))
+    {
+        execute(EditorCommand::Group);
+    }
+    if (ImGui::MenuItem("Ungroup", "Cmd/Ctrl+Shift+G", false, hasSelection))
+    {
+        execute(EditorCommand::Ungroup);
+    }
     if (ImGui::MenuItem("Delete", "Del", false, hasSelection))
     {
         m_host.deleteSelection();
@@ -190,6 +198,10 @@ void Editor::drawAddMenu()
     {
         addLight();
     }
+    if (ImGui::MenuItem("Spot light"))
+    {
+        addLight(true);
+    }
     if (ImGui::MenuItem("Player spawn"))
     {
         addSpawn();
@@ -209,6 +221,25 @@ void Editor::drawViewMenu()
     if (ImGui::MenuItem("Light markers", nullptr, &m_showLightMarkers))
     {
         m_host.setLightMarkersVisible(m_showLightMarkers);
+    }
+
+    ImGui::Separator();
+    int mode = m_host.viewMode();
+    if (ImGui::MenuItem("Perspective", "F6", mode == 0))
+    {
+        execute(EditorCommand::ViewPerspective);
+    }
+    if (ImGui::MenuItem("Top", "F3", mode == 1))
+    {
+        execute(EditorCommand::ViewTop);
+    }
+    if (ImGui::MenuItem("Front", "F4", mode == 2))
+    {
+        execute(EditorCommand::ViewFront);
+    }
+    if (ImGui::MenuItem("Right", "F5", mode == 3))
+    {
+        execute(EditorCommand::ViewRight);
     }
 
     ImGui::Separator();
@@ -312,6 +343,12 @@ void Editor::drawToolsPanel()
         addLight();
     }
     hint("Place a point light 2.5 m above where the camera is looking");
+
+    if (ImGui::Button("Add spot light", ImVec2(-1.0f, 0.0f)))
+    {
+        addLight(true);
+    }
+    hint("A cone of light. Aim it with Yaw and Pitch in the Inspector");
 
     if (ImGui::Button("Add player spawn", ImVec2(-1.0f, 0.0f)))
     {
@@ -444,6 +481,10 @@ void Editor::drawOutlinerPanel()
 
                 ImGui::TableSetColumnIndex(0);
                 std::string label = std::string(kindTag(item.kind)) + "   " + item.name;
+                if (item.group != 0)
+                {
+                    label += "   [G" + std::to_string(item.group) + "]";
+                }
                 if (ImGui::Selectable(label.c_str(), item.selected, ImGuiSelectableFlags_AllowDoubleClick))
                 {
                     if (ImGui::IsMouseDoubleClicked(0))
@@ -566,6 +607,21 @@ void Editor::drawInspectorPanel()
     if (count > 1)
     {
         ImGui::Text("%d items selected", count);
+        ImGui::SeparatorText("Group");
+        {
+            float groupSpacing = ImGui::GetStyle().ItemSpacing.x;
+            float groupHalf = (ImGui::GetContentRegionAvail().x - groupSpacing) * 0.5f;
+            if (ImGui::Button("Group", ImVec2(groupHalf, 0.0f)))
+            {
+                execute(EditorCommand::Group);
+            }
+            hint("Items in a group are selected, moved and copied together");
+            ImGui::SameLine();
+            if (ImGui::Button("Ungroup", ImVec2(groupHalf, 0.0f)))
+            {
+                execute(EditorCommand::Ungroup);
+            }
+        }
         ImGui::SeparatorText("Visibility");
 
         float spacing = ImGui::GetStyle().ItemSpacing.x;
@@ -842,6 +898,18 @@ void Editor::drawLightProperties(LightDef& light)
     ImGui::DragFloat("Intensity##light", &light.intensity, 0.25f, 0.0f, 1000.0f, "%.1f");
     ImGui::DragFloat("Radius##light", &light.radius, 0.1f, 0.5f, 200.0f, "%.1f m");
     hint("Distance at which the light fades to nothing");
+    ImGui::Checkbox("Spot light##light", &light.spot);
+    hint("Limit the light to a cone. Aim it with Yaw above and Pitch here, or rotate it with R");
+    if (light.spot)
+    {
+        ImGui::SliderFloat("Pitch##light", &light.pitch, -90.0f, 90.0f, "%.0f deg");
+        hint("-90 points straight down, 0 horizontal, 90 straight up");
+        ImGui::SliderFloat("Outer angle##light", &light.outerAngle, 1.0f, 89.0f, "%.0f deg");
+        hint("Half-angle where the cone fades to nothing");
+        light.innerAngle = std::min(light.innerAngle, light.outerAngle - 0.5f);
+        ImGui::SliderFloat("Inner angle##light", &light.innerAngle, 0.0f, light.outerAngle - 0.5f, "%.0f deg");
+        hint("Half-angle of the full-brightness core");
+    }
 }
 
 void Editor::drawStatusBar(float framesPerSecond)
