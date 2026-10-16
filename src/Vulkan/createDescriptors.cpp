@@ -268,7 +268,8 @@ void BlackGlass::updateUniformBuffer(uint32_t currentImage)
                      * glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, -1.0f, 1.0f))
                      * glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -groundY, 0.0f));
     reflUbo.view = ubo.view * mirror;
-    reflUbo.invViewProj = glm::inverse(ubo.proj * reflUbo.view);
+    m_reflViewProj = ubo.proj * reflUbo.view;
+    reflUbo.invViewProj = glm::inverse(m_reflViewProj);
     reflUbo.cameraPos = glm::vec4(glm::vec3(mirror * glm::vec4(m_camera.position, 1.0f)), 1.0f);
     reflUbo.effectParams = glm::vec4(0.0f, 0.0f, 0.0f, m_settings.floorRoughness);
     reflUbo.passParams = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);

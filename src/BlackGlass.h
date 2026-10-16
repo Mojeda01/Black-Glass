@@ -346,6 +346,7 @@ private:
     VkPipeline M_SHADOWPIPELINE = VK_NULL_HANDLE;
     glm::mat4 M_LIGHTVIEWPROJ{ 1.0f };
     glm::mat4 m_viewProj{ 1.0f };
+    glm::mat4 m_reflViewProj{ 1.0f };
     glm::vec3 M_LIGHTDIR{ 0.5f, 1.0f, 0.3f };
     glm::vec3 M_SCENEMIN{ 0.0f };
     glm::vec3 M_SCENEMAX{ 0.0f };

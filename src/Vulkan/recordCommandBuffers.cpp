@@ -179,6 +179,15 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
     const bool hasTransparent = !transparentOrder.empty();
 
     const Model* boundModel = nullptr;
+    bool constantsPushed = false;
+    const void* pushedAsset = nullptr;
+    uint32_t pushedMaterial = ~0u;
+    auto invalidateDescriptors = [&]()
+    {
+        constantsPushed = false;
+        pushedAsset = nullptr;
+        pushedMaterial = ~0u;
+    };
 
     VkDescriptorBufferInfo bufferInfo{};
     bufferInfo.buffer = M_UNIFORMBUFFERS[M_CURRENTFRAME].buffer;
@@ -226,6 +235,9 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
             vkCmdBindIndexBuffer(commandBuffer, model.asset->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
             boundModel = &model;
         }
+
+        const bool sameMaterial = constantsPushed && pushedAsset == model.asset.get() &&
+                                  pushedMaterial == static_cast<uint32_t>(prim.materialIndex);
 
         const Material& material = model.asset->materials[prim.materialIndex];
 
@@ -304,10 +316,23 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
         descriptorWrites[REFLECTION_BINDING_INDEX].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorWrites[REFLECTION_BINDING_INDEX].pImageInfo = &reflInfo;
 
-        M_PUSHDESCRIPTORFN(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            M_PIPELINELAYOUT, 0,
-                            static_cast<uint32_t>(descriptorWrites.size()),
-                            descriptorWrites.data());
+        if (!constantsPushed)
+        {
+            M_PUSHDESCRIPTORFN(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                M_PIPELINELAYOUT, 0,
+                                static_cast<uint32_t>(descriptorWrites.size()),
+                                descriptorWrites.data());
+            constantsPushed = true;
+        }
+        else if (!sameMaterial)
+        {
+            M_PUSHDESCRIPTORFN(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                M_PIPELINELAYOUT, 0,
+                                1 + MATERIAL_TEXTURE_SLOTS,
+                                descriptorWrites.data() + 1);
+        }
+        pushedAsset = model.asset.get();
+        pushedMaterial = static_cast<uint32_t>(prim.materialIndex);
 
         glm::mat4 world = model.transform * prim.worldMatrix;
         vkCmdPushConstants(commandBuffer, M_PIPELINELAYOUT, VK_SHADER_STAGE_VERTEX_BIT,
@@ -368,6 +393,7 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
                             static_cast<uint32_t>(skyWrites.size()),
                             skyWrites.data());
         vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        invalidateDescriptors();
     };
 
     VkViewport fullViewport{};
@@ -607,9 +633,11 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
         vkCmdSetViewport(commandBuffer, 0, 1, &reflViewport);
         vkCmdSetScissor(commandBuffer, 0, 1, &reflScissor);
         boundModel = nullptr;
+        invalidateDescriptors();
+        const Frustum reflFrustum(m_reflViewProj);
         for (const Model* model : drawModels)
         {
-            if (model->isGround)
+            if (model->isGround || !reflFrustum.intersects(model->worldMin, model->worldMax))
             {
                 continue;
             }
@@ -624,6 +652,7 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
         drawSky();
         vkCmdEndRendering(commandBuffer);
         boundModel = nullptr;
+        invalidateDescriptors();
 
         bufferInfo.buffer = frameBuffer;
         reflInfo = savedReflInfo;
@@ -914,6 +943,7 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
         vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
         boundModel = nullptr;
+        invalidateDescriptors();
 
         RenderClass boundClass = RenderClass::Opaque;
         bool pipelineBound = false;
