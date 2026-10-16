@@ -1,6 +1,6 @@
 <div align="center">
 
-# BLACK GLASS
+<img src="media/loading.gif">
 
 **A from-scratch Vulkan renderer, built as a clean template to start your own engine from.**
 
