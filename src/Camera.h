@@ -9,6 +9,7 @@ public:
     glm::vec3 position{ 0.0f, 0.0f, 3.0f };
     float yaw = -90.0f;
     float pitch = 0.0f;
+    float roll = 0.0f;
     float speed = 2.5f;
     float sensitivity = 0.1f;
 
@@ -28,7 +29,13 @@ public:
 
     glm::mat4 view() const
     {
-        return glm::lookAt(position, position + front(), glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::vec3 forward = front();
+        glm::vec3 up(0.0f, 1.0f, 0.0f);
+        if (roll != 0.0f)
+        {
+            up = glm::rotate(glm::mat4(1.0f), glm::radians(roll), forward) * glm::vec4(up, 0.0f);
+        }
+        return glm::lookAt(position, position + forward, up);
     }
 
     void processMouse(float deltaX, float deltaY)

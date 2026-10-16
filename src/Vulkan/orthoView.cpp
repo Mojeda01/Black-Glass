@@ -13,7 +13,11 @@ namespace
 
 float BlackGlass::activeFov() const
 {
-    return m_orthoMode != 0 ? ORTHO_FOV : m_fov;
+    if (m_orthoMode != 0)
+    {
+        return ORTHO_FOV;
+    }
+    return m_walkMode ? m_fov + m_walkFovBoost : m_fov;
 }
 
 float BlackGlass::orthoCameraDistance() const

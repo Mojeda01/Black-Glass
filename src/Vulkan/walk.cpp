@@ -15,10 +15,44 @@ namespace
     constexpr float JUMP_SPEED = 7.0f;
     constexpr float WALK_SPEED = 4.2f;
     constexpr float SPRINT_SPEED = 7.5f;
+    constexpr float GROUND_ACCEL = 55.0f;
+    constexpr float AIR_ACCEL = 14.0f;
+    constexpr float PHYSICS_STEP = 1.0f / 120.0f;
+    constexpr int MAX_PHYSICS_STEPS = 12;
+    constexpr float EYE_SMOOTH_RATE = 16.0f;
+    constexpr float EYE_SNAP_DISTANCE = 1.5f;
+    constexpr float BOB_RADIANS_PER_METER = 2.1f;
+    constexpr float BOB_SPRINT_STRIDE = 0.7f;
+    constexpr float BOB_VERTICAL = 0.022f;
+    constexpr float BOB_SIDE = 0.015f;
+    constexpr float BOB_SKEW = 0.25f;
+    constexpr float BOB_SMOOTH_TIME = 0.06f;
+    constexpr float LAND_SMOOTH_TIME = 0.05f;
+    constexpr float DT_SMOOTH_RATE = 0.12f;
+    constexpr float DT_HITCH_RATIO = 3.0f;
+    constexpr float LAND_MIN_IMPACT = 3.5f;
+    constexpr float LAND_DIP_SCALE = 0.014f;
+    constexpr float LAND_DIP_MAX = 0.2f;
+    constexpr float LAND_RECOVER_RATE = 9.0f;
+    constexpr float SPRINT_FOV_BOOST = 6.0f;
+    constexpr float STRAFE_ROLL = 1.2f;
+    constexpr float LOOK_ROLL_SCALE = 0.0025f;
+    constexpr float MAX_ROLL = 2.0f;
     constexpr float FLOOR_HEIGHT = 0.0f;
     constexpr float FALL_LIMIT = -60.0f;
     constexpr int RESOLVE_PASSES = 4;
     constexpr float STEEP_SLOPE = 1.2f;
+
+    void smoothDamp(float& value, float& velocity, float target, float smoothTime, float dt)
+    {
+        float omega = 2.0f / smoothTime;
+        float x = omega * dt;
+        float decay = 1.0f / (1.0f + x + 0.48f * x * x + 0.235f * x * x * x);
+        float change = value - target;
+        float temp = (velocity + omega * change) * dt;
+        velocity = (velocity - omega * temp) * decay;
+        value = target + (change + temp) * decay;
+    }
 
     glm::vec2 toLocal(const CollisionPiece& piece, const glm::vec2& world)
     {
@@ -193,6 +227,24 @@ void BlackGlass::toggleWalkMode(bool fromCamera)
     m_walkStart = m_walkFeet;
     m_walkVelocity = glm::vec3(0.0f);
     m_walkGrounded = false;
+    m_walkPrevFeet = m_walkFeet;
+    m_walkAccumulator = 0.0f;
+    m_walkEyeValid = false;
+    m_walkBobPhase = 0.0f;
+    m_walkBobAmount = 0.0f;
+    m_walkLandImpact = 0.0f;
+    m_walkLandOffset = 0.0f;
+    m_walkFovBoost = 0.0f;
+    m_walkRoll = 0.0f;
+    m_walkSmoothDt = 0.0f;
+    m_walkBobY = 0.0f;
+    m_walkBobYVelocity = 0.0f;
+    m_walkBobX = 0.0f;
+    m_walkBobXVelocity = 0.0f;
+    m_walkLandShown = 0.0f;
+    m_walkLandVelocity = 0.0f;
+    m_camera.roll = 0.0f;
+    m_walkLastYaw = m_camera.yaw;
     m_camera.pitch = std::clamp(m_camera.pitch, -60.0f, 60.0f);
     m_walkMode = true;
     setMouseCaptured(true);
@@ -206,6 +258,8 @@ void BlackGlass::exitWalkMode()
     }
     m_walkMode = false;
     m_collision.clear();
+    m_camera.roll = 0.0f;
+    m_walkFovBoost = 0.0f;
     m_camera.position = m_savedCameraPosition;
     m_camera.yaw = m_savedCameraYaw;
     m_camera.pitch = m_savedCameraPitch;
@@ -215,7 +269,104 @@ void BlackGlass::exitWalkMode()
 
 void BlackGlass::updateWalk(float deltaTime)
 {
-    float dt = std::min(deltaTime, 0.05f);
+    float rawTime = std::max(std::min(deltaTime, 0.1f), 1e-4f);
+    if (m_walkSmoothDt <= 0.0f || rawTime > m_walkSmoothDt * DT_HITCH_RATIO)
+    {
+        m_walkSmoothDt = rawTime;
+    }
+    else
+    {
+        m_walkSmoothDt += (rawTime - m_walkSmoothDt) * DT_SMOOTH_RATE;
+    }
+    const float frameTime = m_walkSmoothDt;
+
+    m_walkAccumulator += frameTime;
+
+    int steps = 0;
+    while (m_walkAccumulator >= PHYSICS_STEP && steps < MAX_PHYSICS_STEPS)
+    {
+        m_walkPrevFeet = m_walkFeet;
+        stepWalk(PHYSICS_STEP);
+        m_walkAccumulator -= PHYSICS_STEP;
+        steps++;
+    }
+    if (steps == MAX_PHYSICS_STEPS)
+    {
+        m_walkAccumulator = 0.0f;
+    }
+
+    float alpha = std::clamp(m_walkAccumulator / PHYSICS_STEP, 0.0f, 1.0f);
+    glm::vec3 feet = glm::mix(m_walkPrevFeet, m_walkFeet, alpha);
+    float targetEye = feet.y + EYE_HEIGHT;
+
+    if (!m_walkEyeValid || std::abs(targetEye - m_walkEyeY) > EYE_SNAP_DISTANCE)
+    {
+        m_walkEyeY = targetEye;
+        m_walkEyeValid = true;
+    }
+    else if (m_walkGrounded)
+    {
+        float blend = 1.0f - std::exp(-EYE_SMOOTH_RATE * frameTime);
+        m_walkEyeY += (targetEye - m_walkEyeY) * blend;
+    }
+    else
+    {
+        m_walkEyeY = targetEye;
+    }
+
+    glm::vec2 horizontal(m_walkVelocity.x, m_walkVelocity.z);
+    float horizontalSpeed = glm::length(horizontal);
+    float sprintFraction = std::clamp((horizontalSpeed - WALK_SPEED) / (SPRINT_SPEED - WALK_SPEED), 0.0f, 1.0f);
+
+    float speedWeight = std::clamp((horizontalSpeed - 0.3f) / 1.2f, 0.0f, 1.0f);
+    speedWeight = speedWeight * speedWeight * (3.0f - 2.0f * speedWeight);
+    float bobTarget = m_walkGrounded ? speedWeight * std::clamp(horizontalSpeed / WALK_SPEED, 0.0f, 1.8f) : 0.0f;
+    m_walkBobAmount += (bobTarget - m_walkBobAmount) * (1.0f - std::exp(-8.0f * frameTime));
+
+    float stride = BOB_RADIANS_PER_METER * (1.0f + (BOB_SPRINT_STRIDE - 1.0f) * sprintFraction);
+    m_walkBobPhase += horizontalSpeed * stride * frameTime;
+    if (m_walkBobPhase > 6.2831853f * 64.0f)
+    {
+        m_walkBobPhase -= 6.2831853f * 64.0f;
+    }
+
+    float stepAngle = m_walkBobPhase * 2.0f;
+    float bobShape = std::sin(stepAngle) - BOB_SKEW * std::sin(stepAngle * 2.0f);
+    float bobVerticalTarget = bobShape * BOB_VERTICAL * m_walkBobAmount;
+    float bobSideTarget = std::sin(m_walkBobPhase) * BOB_SIDE * m_walkBobAmount;
+    smoothDamp(m_walkBobY, m_walkBobYVelocity, bobVerticalTarget, BOB_SMOOTH_TIME, frameTime);
+    smoothDamp(m_walkBobX, m_walkBobXVelocity, bobSideTarget, BOB_SMOOTH_TIME, frameTime);
+
+    if (m_walkLandImpact > 0.0f)
+    {
+        if (m_walkLandImpact > LAND_MIN_IMPACT)
+        {
+            float dip = std::min((m_walkLandImpact - LAND_MIN_IMPACT) * LAND_DIP_SCALE, LAND_DIP_MAX);
+            m_walkLandOffset = std::max(m_walkLandOffset, dip);
+        }
+        m_walkLandImpact = 0.0f;
+    }
+    m_walkLandOffset *= std::exp(-LAND_RECOVER_RATE * frameTime);
+    smoothDamp(m_walkLandShown, m_walkLandVelocity, m_walkLandOffset, LAND_SMOOTH_TIME, frameTime);
+
+    float fovTarget = SPRINT_FOV_BOOST * sprintFraction;
+    m_walkFovBoost += (fovTarget - m_walkFovBoost) * (1.0f - std::exp(-6.0f * frameTime));
+
+    float yawRate = (m_camera.yaw - m_walkLastYaw) / rawTime;
+    m_walkLastYaw = m_camera.yaw;
+    float yawRadians = glm::radians(m_camera.yaw);
+    glm::vec2 strafeAxis(-std::sin(yawRadians), std::cos(yawRadians));
+    float strafeFraction = std::clamp(glm::dot(horizontal, strafeAxis) / SPRINT_SPEED, -1.0f, 1.0f);
+    float rollTarget = std::clamp(strafeFraction * STRAFE_ROLL + yawRate * LOOK_ROLL_SCALE, -MAX_ROLL, MAX_ROLL);
+    m_walkRoll += (rollTarget - m_walkRoll) * (1.0f - std::exp(-9.0f * frameTime));
+    m_camera.roll = m_walkRoll;
+
+    glm::vec3 sideAxis = m_camera.right();
+    m_camera.position = glm::vec3(feet.x, m_walkEyeY + m_walkBobY - m_walkLandShown, feet.z) + sideAxis * m_walkBobX;
+}
+
+void BlackGlass::stepWalk(float dt)
+{
     glm::vec3& feet = m_walkFeet;
 
     bool typing = m_imguiReady && ImGui::GetIO().WantTextInput;
@@ -236,8 +387,23 @@ void BlackGlass::updateWalk(float deltaTime)
     }
     float speed = down(GLFW_KEY_LEFT_SHIFT) ? SPRINT_SPEED : WALK_SPEED;
 
-    glm::vec2 position(feet.x, feet.z);
-    position += wish * speed * dt;
+    glm::vec2 velocity(m_walkVelocity.x, m_walkVelocity.z);
+    glm::vec2 desired = wish * speed;
+    glm::vec2 difference = desired - velocity;
+    float differenceLength = glm::length(difference);
+    float maxChange = (m_walkGrounded ? GROUND_ACCEL : AIR_ACCEL) * dt;
+    if (differenceLength <= maxChange)
+    {
+        velocity = desired;
+    }
+    else
+    {
+        velocity += difference / differenceLength * maxChange;
+    }
+
+    glm::vec2 startPosition(feet.x, feet.z);
+    glm::vec2 position = startPosition + velocity * dt;
+    glm::vec2 intended = position - startPosition;
 
     for (int pass = 0; pass < RESOLVE_PASSES; pass++)
     {
@@ -289,6 +455,13 @@ void BlackGlass::updateWalk(float deltaTime)
             break;
         }
     }
+    glm::vec2 actual = position - startPosition;
+    if (glm::dot(actual, actual) < glm::dot(intended, intended) - 1e-10f)
+    {
+        velocity = actual / dt;
+    }
+    m_walkVelocity.x = velocity.x;
+    m_walkVelocity.z = velocity.y;
     feet.x = position.x;
     feet.z = position.y;
 
@@ -352,6 +525,7 @@ void BlackGlass::updateWalk(float deltaTime)
 
         if (next <= ground && m_walkVelocity.y <= 0.0f)
         {
+            m_walkLandImpact = std::max(m_walkLandImpact, -m_walkVelocity.y);
             feet.y = ground;
             m_walkVelocity.y = 0.0f;
             m_walkGrounded = true;
@@ -367,7 +541,7 @@ void BlackGlass::updateWalk(float deltaTime)
         feet = m_walkStart;
         m_walkVelocity = glm::vec3(0.0f);
         m_walkGrounded = false;
+        m_walkPrevFeet = feet;
+        m_walkEyeValid = false;
     }
-
-    m_camera.position = glm::vec3(feet.x, feet.y + EYE_HEIGHT, feet.z);
 }
