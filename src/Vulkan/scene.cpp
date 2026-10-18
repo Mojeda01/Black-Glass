@@ -402,6 +402,8 @@ void BlackGlass::destroyAsset(ModelAsset& asset)
 {
     destroyBuffer(asset.vertexBuffer);
     destroyBuffer(asset.indexBuffer);
+    destroyBuffer(asset.skinBuffer);
+    asset.skeleton.reset();
     destroyBuffer(asset.materialBuffer);
 
     for (auto& image : asset.textureImages)

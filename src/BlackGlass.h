@@ -55,6 +55,8 @@ struct ModelAsset
     std::string path;
     AllocatedBuffer vertexBuffer{};
     AllocatedBuffer indexBuffer{};
+    AllocatedBuffer skinBuffer{};
+    std::shared_ptr<Skeleton> skeleton;
     std::vector<AllocatedImage> textureImages;
     std::vector<VkSampler> samplers;
     std::vector<GpuTexture> textures;
@@ -77,6 +79,7 @@ struct Model
     bool locked = false;
     bool isGround = false;
     bool ghost = false;
+    bool viewModel = false;
     glm::vec3 position{ 0.0f };
     float yawDegrees = 0.0f;
     float scale = 1.0f;
@@ -105,6 +108,7 @@ struct CollisionPiece
 };
 
 constexpr uint32_t MAX_POINT_LIGHTS = 16;
+constexpr uint32_t MAX_JOINTS = 128;
 
 struct UniformBufferObject 
 {
@@ -127,6 +131,7 @@ struct UniformBufferObject
     glm::vec4 lightPositions[MAX_POINT_LIGHTS];
     glm::vec4 lightColors[MAX_POINT_LIGHTS];
     glm::vec4 lightDirections[MAX_POINT_LIGHTS];
+    glm::mat4 jointMatrices[MAX_JOINTS];
 };
 
 constexpr VkFormat HDR_FORMAT = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -375,6 +380,7 @@ private:
     VkPipeline M_SKYPIPELINE = VK_NULL_HANDLE;
     VkPipeline M_TRANSMISSIONPIPELINE = VK_NULL_HANDLE;
     VkPipeline M_BLENDPIPELINE = VK_NULL_HANDLE;
+    VkPipeline M_VIEWMODELPIPELINE = VK_NULL_HANDLE;
 
     // COMMANDS 
     VkCommandPool M_COMMANDPOOL = VK_NULL_HANDLE;
@@ -437,6 +443,22 @@ private:
     float m_savedCameraPitch = 0.0f;
     std::vector<CollisionPiece> m_collision;
     void buildCollision();
+    void loadViewModel();
+    void updateViewModel(float deltaTime, float sprintFraction);
+    void destroyViewModel();
+    std::unique_ptr<Model> m_viewModel;
+    bool m_viewModelTried = false;
+    bool m_viewModelReady = false;
+    int m_viewIdleClip = -1;
+    int m_viewWalkClip = -1;
+    int m_viewRunClip = -1;
+    float m_viewIdleTime = 0.0f;
+    glm::vec3 m_viewEye{ 0.0f };
+    float m_viewUnits = 1.0f;
+    glm::vec3 m_viewOffset{ 0.10f, -0.04f, -0.10f };
+    float m_viewSize = 0.6f;
+    std::string m_viewDebug;
+    std::vector<glm::mat4> m_viewJoints;
     void updateWalk(float deltaTime);
     void stepWalk(float dt);
     std::string m_loadError;

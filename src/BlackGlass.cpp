@@ -129,6 +129,7 @@ void BlackGlass::cleanup()
     cleanupSwapchain();
     std::cout << "  [cleanup] Swapchain resources destroyed. \n";
     
+    destroyViewModel();
     M_MODELS.clear();
     m_selected = nullptr;
     m_selection.clear();
@@ -213,7 +214,7 @@ void BlackGlass::cleanup()
         M_TIMESTAMPPOOL = VK_NULL_HANDLE;
     }
 
-    for (VkPipeline pipeline : { M_PREPASSPIPELINE, M_SSAOPIPELINE, M_SSAOBLURPIPELINE, M_SKYPIPELINE, M_TRANSMISSIONPIPELINE, M_BLENDPIPELINE, M_BLOOMDOWNPIPELINE, M_BLOOMUPPIPELINE, M_COMPOSITEPIPELINE, M_DEBUGLINEPIPELINE, M_DEBUGOVERLAYPIPELINE })
+    for (VkPipeline pipeline : { M_PREPASSPIPELINE, M_SSAOPIPELINE, M_SSAOBLURPIPELINE, M_SKYPIPELINE, M_TRANSMISSIONPIPELINE, M_BLENDPIPELINE, M_VIEWMODELPIPELINE, M_BLOOMDOWNPIPELINE, M_BLOOMUPPIPELINE, M_COMPOSITEPIPELINE, M_DEBUGLINEPIPELINE, M_DEBUGOVERLAYPIPELINE })
     {
         if (pipeline != VK_NULL_HANDLE)
         {

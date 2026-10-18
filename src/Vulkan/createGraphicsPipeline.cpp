@@ -199,6 +199,34 @@ void BlackGlass::createGraphicsPipeline()
         throw std::runtime_error("Failed to create blend pipeline!");
     }
 
+    VkPipelineShaderStageCreateInfo skinnedVertStageInfo = vertShaderStageInfo;
+    skinnedVertStageInfo.pName = "skinnedVertexMain";
+    VkPipelineShaderStageCreateInfo skinnedStages[] = { skinnedVertStageInfo, fragShaderStageInfo };
+
+    VkVertexInputBindingDescription skinnedBindings[2] = { bindingDescription, SkinVertex::getBindingDescription() };
+    auto skinAttributes = SkinVertex::getAttributeDescriptions();
+    std::vector<VkVertexInputAttributeDescription> skinnedAttributes(attributeDescriptions.begin(), attributeDescriptions.end());
+    skinnedAttributes.insert(skinnedAttributes.end(), skinAttributes.begin(), skinAttributes.end());
+
+    VkPipelineVertexInputStateCreateInfo skinnedVertexInput{};
+    skinnedVertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    skinnedVertexInput.vertexBindingDescriptionCount = 2;
+    skinnedVertexInput.pVertexBindingDescriptions = skinnedBindings;
+    skinnedVertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(skinnedAttributes.size());
+    skinnedVertexInput.pVertexAttributeDescriptions = skinnedAttributes.data();
+
+    colorBlendAttachment.blendEnable = VK_FALSE;
+    depthStencil.depthWriteEnable = VK_TRUE;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+    pipelineInfo.pStages = skinnedStages;
+    pipelineInfo.pVertexInputState = &skinnedVertexInput;
+
+    if (vkCreateGraphicsPipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &M_VIEWMODELPIPELINE) != VK_SUCCESS)
+    {
+        vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
+        throw std::runtime_error("Failed to create view model pipeline!");
+    }
+
     vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
 
     std::cout << "  [createGraphicsPipeline] SUCCESS - Graphics pipeline created. \n";

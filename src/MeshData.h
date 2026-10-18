@@ -1,6 +1,7 @@
 #pragma once
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <array>
 #include <cstddef>
@@ -54,6 +55,71 @@ struct Vertex
 
         return attributeDescriptions;
     }
+};
+
+struct SkinVertex
+{
+    glm::uvec4 joints{ 0 };
+    glm::vec4 weights{ 1.0f, 0.0f, 0.0f, 0.0f };
+
+    static VkVertexInputBindingDescription getBindingDescription()
+    {
+        VkVertexInputBindingDescription bindingDescription{};
+        bindingDescription.binding = 1;
+        bindingDescription.stride = sizeof(SkinVertex);
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+        return bindingDescription;
+    }
+
+    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions()
+    {
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+        attributeDescriptions[0].binding = 1;
+        attributeDescriptions[0].location = 5;
+        attributeDescriptions[0].format = VK_FORMAT_R32G32B32A32_UINT;
+        attributeDescriptions[0].offset = offsetof(SkinVertex, joints);
+        attributeDescriptions[1].binding = 1;
+        attributeDescriptions[1].location = 6;
+        attributeDescriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        attributeDescriptions[1].offset = offsetof(SkinVertex, weights);
+        return attributeDescriptions;
+    }
+};
+
+struct SkeletonNode
+{
+    int parent = -1;
+    glm::vec3 translation{ 0.0f };
+    glm::quat rotation{ 1.0f, 0.0f, 0.0f, 0.0f };
+    glm::vec3 scale{ 1.0f };
+    glm::mat4 matrix{ 1.0f };
+    bool hasMatrix = false;
+};
+
+struct AnimChannel
+{
+    int node = -1;
+    int path = 0;
+    bool step = false;
+    std::vector<float> times;
+    std::vector<glm::vec4> values;
+};
+
+struct AnimationClip
+{
+    std::string name;
+    float duration = 0.0f;
+    std::vector<AnimChannel> channels;
+};
+
+struct Skeleton
+{
+    std::vector<SkeletonNode> nodes;
+    std::vector<int> order;
+    std::vector<int> joints;
+    std::vector<std::string> jointNames;
+    std::vector<glm::mat4> inverseBind;
+    std::vector<AnimationClip> clips;
 };
 
 constexpr uint32_t MATERIAL_TEXTURE_SLOTS = 5;
@@ -135,4 +201,6 @@ struct MeshData {
     std::vector<SamplerData> samplers;
     std::vector<TextureData> textures;
     std::vector<Material> materials;
+    std::vector<SkinVertex> skinVertices;
+    Skeleton skeleton;
 };

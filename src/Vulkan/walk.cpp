@@ -370,6 +370,7 @@ void BlackGlass::toggleWalkMode(bool fromCamera)
     cancelPlacement();
     clearSelection();
     buildCollision();
+    loadViewModel();
 
     m_savedCameraPosition = m_camera.position;
     m_savedCameraYaw = m_camera.yaw;
@@ -532,6 +533,7 @@ void BlackGlass::updateWalk(float deltaTime)
 
     glm::vec3 sideAxis = m_camera.right();
     m_camera.position = glm::vec3(feet.x, m_walkEyeY + m_walkBobY - m_walkLandShown, feet.z) + sideAxis * m_walkBobX;
+    updateViewModel(rawTime, sprintFraction);
 
     double now = glfwGetTime();
     const float accelInUse = m_walkGrounded ? GROUND_ACCEL : AIR_ACCEL;
@@ -795,6 +797,10 @@ void BlackGlass::drawWalkDebug()
                     g_hud.unsettled ? 1 : 0, g_hud.steps);
         ImGui::Text("dt %.4f   feet %.2f %.2f %.2f", g_hud.dt, g_hud.feet.x, g_hud.feet.y, g_hud.feet.z);
         ImGui::Text("log/%s  (%u rows)", g_logName.c_str(), g_logRows);
+        if (!m_viewDebug.empty())
+        {
+            ImGui::Text("%s", m_viewDebug.c_str());
+        }
     }
     ImGui::End();
 }

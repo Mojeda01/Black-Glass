@@ -561,6 +561,8 @@ MeshData BlackGlass::loadGltf(const std::string& path)
     int defaultMaterial = static_cast<int>(mesh.materials.size());
     mesh.materials.push_back(Material{});
 
+    const bool hasSkin = !model.skins.empty();
+
     std::map<int, std::vector<Primitive>> meshCache;
 
     auto loadMesh = [&](int meshIndex) -> const std::vector<Primitive>&
@@ -664,6 +666,38 @@ MeshData BlackGlass::loadGltf(const std::string& path)
                 generateTangents(local, localIndices);
             }
 
+            std::vector<SkinVertex> localSkin;
+            if (hasSkin)
+            {
+                localSkin.resize(vertexCount);
+                auto jointsIt = prim.attributes.find("JOINTS_0");
+                auto weightsIt = prim.attributes.find("WEIGHTS_0");
+                if (jointsIt != prim.attributes.end() && weightsIt != prim.attributes.end())
+                {
+                    std::vector<float> joints = readAccessor(model, model.accessors[jointsIt->second]);
+                    std::vector<float> weights = readAccessor(model, model.accessors[weightsIt->second]);
+                    for (size_t i = 0; i < vertexCount && i * 4 + 3 < joints.size() && i * 4 + 3 < weights.size(); i++)
+                    {
+                        SkinVertex& skinVertex = localSkin[i];
+                        for (int c = 0; c < 4; c++)
+                        {
+                            skinVertex.joints[c] = static_cast<uint32_t>(joints[i * 4 + c]);
+                            skinVertex.weights[c] = weights[i * 4 + c];
+                        }
+                        float sum = skinVertex.weights.x + skinVertex.weights.y + skinVertex.weights.z + skinVertex.weights.w;
+                        if (sum > 1e-6f)
+                        {
+                            skinVertex.weights /= sum;
+                        }
+                        else
+                        {
+                            skinVertex.joints = glm::uvec4(0);
+                            skinVertex.weights = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+                        }
+                    }
+                }
+            }
+
             uint32_t vertexOffset = static_cast<uint32_t>(mesh.vertices.size());
 
             Primitive record{};
@@ -672,6 +706,10 @@ MeshData BlackGlass::loadGltf(const std::string& path)
                                     ? prim.material : defaultMaterial;
 
             mesh.vertices.insert(mesh.vertices.end(), local.begin(), local.end());
+            if (hasSkin)
+            {
+                mesh.skinVertices.insert(mesh.skinVertices.end(), localSkin.begin(), localSkin.end());
+            }
             for (uint32_t index : localIndices)
             {
                 mesh.indices.push_back(index + vertexOffset);
@@ -693,7 +731,7 @@ MeshData BlackGlass::loadGltf(const std::string& path)
         {
             for (Primitive instance : loadMesh(node.mesh))
             {
-                instance.worldMatrix = world;
+                instance.worldMatrix = node.skin >= 0 ? glm::mat4(1.0f) : world;
                 mesh.primitives.push_back(instance);
             }
         }
@@ -723,6 +761,132 @@ MeshData BlackGlass::loadGltf(const std::string& path)
     if (mesh.primitives.empty())
     {
         throw std::runtime_error("glTF mesh has no triangle primitives with POSITION!");
+    }
+
+    if (hasSkin)
+    {
+        Skeleton& skeleton = mesh.skeleton;
+        const tinygltf::Skin& skin = model.skins[0];
+        const size_t nodeCount = model.nodes.size();
+        skeleton.nodes.resize(nodeCount);
+        for (size_t i = 0; i < nodeCount; i++)
+        {
+            const tinygltf::Node& node = model.nodes[i];
+            SkeletonNode& out = skeleton.nodes[i];
+            if (node.matrix.size() == 16)
+            {
+                out.hasMatrix = true;
+                out.matrix = nodeLocalMatrix(node);
+            }
+            else
+            {
+                if (node.translation.size() == 3)
+                {
+                    out.translation = glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+                }
+                if (node.rotation.size() == 4)
+                {
+                    out.rotation = glm::quat(static_cast<float>(node.rotation[3]), static_cast<float>(node.rotation[0]),
+                                             static_cast<float>(node.rotation[1]), static_cast<float>(node.rotation[2]));
+                }
+                if (node.scale.size() == 3)
+                {
+                    out.scale = glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
+                }
+            }
+            for (int child : node.children)
+            {
+                if (child >= 0 && child < static_cast<int>(nodeCount))
+                {
+                    skeleton.nodes[child].parent = static_cast<int>(i);
+                }
+            }
+        }
+
+        for (size_t i = 0; i < nodeCount; i++)
+        {
+            if (skeleton.nodes[i].parent < 0)
+            {
+                skeleton.order.push_back(static_cast<int>(i));
+            }
+        }
+        for (size_t head = 0; head < skeleton.order.size(); head++)
+        {
+            for (int child : model.nodes[skeleton.order[head]].children)
+            {
+                if (child >= 0 && child < static_cast<int>(nodeCount))
+                {
+                    skeleton.order.push_back(child);
+                }
+            }
+        }
+
+        skeleton.joints = skin.joints;
+        skeleton.inverseBind.assign(skin.joints.size(), glm::mat4(1.0f));
+        for (int joint : skin.joints)
+        {
+            skeleton.jointNames.push_back(joint >= 0 && joint < static_cast<int>(nodeCount) ? model.nodes[joint].name : std::string());
+        }
+        if (skin.inverseBindMatrices >= 0)
+        {
+            std::vector<float> matrices = readAccessor(model, model.accessors[skin.inverseBindMatrices]);
+            for (size_t j = 0; j < skin.joints.size() && (j + 1) * 16 <= matrices.size(); j++)
+            {
+                std::memcpy(&skeleton.inverseBind[j], &matrices[j * 16], sizeof(glm::mat4));
+            }
+        }
+
+        for (const tinygltf::Animation& animation : model.animations)
+        {
+            AnimationClip clip;
+            clip.name = animation.name;
+            for (const tinygltf::AnimationChannel& channel : animation.channels)
+            {
+                if (channel.target_node < 0 || channel.target_node >= static_cast<int>(nodeCount) ||
+                    channel.sampler < 0 || channel.sampler >= static_cast<int>(animation.samplers.size()))
+                {
+                    continue;
+                }
+
+                AnimChannel out;
+                if (channel.target_path == "translation") out.path = 0;
+                else if (channel.target_path == "rotation") out.path = 1;
+                else if (channel.target_path == "scale") out.path = 2;
+                else continue;
+
+                const tinygltf::AnimationSampler& sampler = animation.samplers[channel.sampler];
+                out.node = channel.target_node;
+                out.step = sampler.interpolation == "STEP";
+                out.times = readAccessor(model, model.accessors[sampler.input]);
+                std::vector<float> values = readAccessor(model, model.accessors[sampler.output]);
+
+                const size_t comps = out.path == 1 ? 4 : 3;
+                const bool cubic = sampler.interpolation == "CUBICSPLINE";
+                out.values.resize(out.times.size());
+                bool complete = !out.times.empty();
+                for (size_t k = 0; k < out.times.size(); k++)
+                {
+                    size_t source = (cubic ? k * 3 + 1 : k) * comps;
+                    if (source + comps > values.size())
+                    {
+                        complete = false;
+                        break;
+                    }
+                    out.values[k] = comps == 4 ? glm::vec4(values[source], values[source + 1], values[source + 2], values[source + 3])
+                                               : glm::vec4(values[source], values[source + 1], values[source + 2], 0.0f);
+                }
+                if (!complete)
+                {
+                    continue;
+                }
+                clip.duration = std::max(clip.duration, out.times.back());
+                clip.channels.push_back(std::move(out));
+            }
+            skeleton.clips.push_back(std::move(clip));
+        }
+
+        std::cout << "  [loadGltf] Skeleton: " << skeleton.joints.size() << " joints, "
+                  << skeleton.clips.size() << " animation clips.\n";
     }
 
     std::cout << "  [loadGltf] SUCCESS - " << mesh.vertices.size() << " vertices, "

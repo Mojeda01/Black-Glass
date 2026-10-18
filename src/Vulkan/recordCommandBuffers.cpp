@@ -339,7 +339,11 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
                             0, sizeof(glm::mat4), &world);
 
         glm::vec4 highlight(0.0f);
-        if (model.ghost)
+        if (model.viewModel)
+        {
+            highlight = glm::vec4(0.0f, 0.0f, 0.0f, -1.0f);
+        }
+        else if (model.ghost)
         {
             highlight = glm::vec4(0.25f, 0.85f, 1.0f, 0.18f);
         }
@@ -776,6 +780,33 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
     }
 
     drawSky();
+
+    if (m_walkMode && m_viewModelReady && m_viewModel)
+    {
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, M_VIEWMODELPIPELINE);
+
+        VkViewport viewModelViewport = viewport;
+        viewModelViewport.maxDepth = 0.1f;
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewModelViewport);
+
+        VkBuffer skinBuffers[] = { m_viewModel->asset->skinBuffer.buffer };
+        VkDeviceSize skinOffsets[] = { 0 };
+        vkCmdBindVertexBuffers(commandBuffer, 1, 1, skinBuffers, skinOffsets);
+
+        boundModel = nullptr;
+        invalidateDescriptors();
+        for (const Primitive& prim : m_viewModel->asset->primitives)
+        {
+            if (prim.renderClass == RenderClass::Opaque)
+            {
+                drawPrimitive(*m_viewModel, prim);
+            }
+        }
+
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+        boundModel = nullptr;
+        invalidateDescriptors();
+    }
 
     if (testedCount + overlayCount > 0)
     {

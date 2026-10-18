@@ -18,6 +18,7 @@ struct FrameData {
     float4 lightPositions[16];
     float4 lightColors[16];
     float4 lightDirections[16];
+    float4x4 jointMatrices[128];
 };
 
 struct MaterialData {
@@ -110,10 +111,19 @@ struct VSOutput {
     nointerpolation float mirrored : TEXCOORD4;
 };
 
+struct SkinnedVSInput {
+    [[vk::location(0)]] float3 pos      : POSITION;
+    [[vk::location(1)]] float3 color    : COLOR;
+    [[vk::location(2)]] float2 texCoord : TEXCOORD0;
+    [[vk::location(3)]] float3 normal   : NORMAL;
+    [[vk::location(4)]] float4 tangent  : TANGENT;
+    [[vk::location(5)]] uint4 joints    : BLENDINDICES;
+    [[vk::location(6)]] float4 weights  : BLENDWEIGHT;
+};
+
 static const float PI = 3.14159265359;
 
-[shader("vertex")]
-VSOutput vertexMain(VSInput input)
+VSOutput transformVertex(VSInput input)
 {
     VSOutput output;
     float4 world = mul(push.model, float4(input.pos, 1.0));
@@ -134,6 +144,30 @@ VSOutput vertexMain(VSInput input)
     float3 c2 = push.model[2].xyz;
     output.mirrored = dot(c0, cross(c1, c2)) < 0.0 ? -1.0 : 1.0;
     return output;
+}
+
+[shader("vertex")]
+VSOutput vertexMain(VSInput input)
+{
+    return transformVertex(input);
+}
+
+[shader("vertex")]
+VSOutput skinnedVertexMain(SkinnedVSInput input)
+{
+    uint4 j = min(input.joints, uint4(127, 127, 127, 127));
+    float4x4 skin = frame.jointMatrices[j.x] * input.weights.x
+                  + frame.jointMatrices[j.y] * input.weights.y
+                  + frame.jointMatrices[j.z] * input.weights.z
+                  + frame.jointMatrices[j.w] * input.weights.w;
+
+    VSInput plain;
+    plain.pos = mul(skin, float4(input.pos, 1.0)).xyz;
+    plain.color = input.color;
+    plain.texCoord = input.texCoord;
+    plain.normal = normalize(mul(skin, float4(input.normal, 0.0)).xyz);
+    plain.tangent = float4(mul(skin, float4(input.tangent.xyz, 0.0)).xyz, input.tangent.w);
+    return transformVertex(plain);
 }
 
 [shader("vertex")]
@@ -214,7 +248,7 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
 
     bool reflectionPass = frame.passParams.x > 0.5;
     bool opaquePath = material.transmissionParams.x <= 0.0 && material.flags1.y != 2;
-    if (frame.effectParams.x > 0.5 && opaquePath && !reflectionPass)
+    if (frame.effectParams.x > 0.5 && opaquePath && !reflectionPass && push.highlight.w > -0.5)
         ao *= aoTex.SampleLevel(input.pos.xy / frame.debugParams.zw, 0.0).r;
 
     int debugView = int(frame.debugParams.x + 0.5);

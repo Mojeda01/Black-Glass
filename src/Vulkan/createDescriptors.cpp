@@ -261,6 +261,12 @@ void BlackGlass::updateUniformBuffer(uint32_t currentImage)
     }
     ubo.lightInfo = glm::vec4(static_cast<float>(lightCount), 0.0f, 0.0f, 0.0f);
 
+    if (m_walkMode && m_viewModelReady && !m_viewJoints.empty())
+    {
+        size_t jointCount = std::min<size_t>(m_viewJoints.size(), MAX_JOINTS);
+        std::memcpy(ubo.jointMatrices, m_viewJoints.data(), sizeof(glm::mat4) * jointCount);
+    }
+
     std::memcpy(M_UNIFORMBUFFERSMAPPED[currentImage], &ubo, sizeof(ubo));
 
     UniformBufferObject reflUbo = ubo;

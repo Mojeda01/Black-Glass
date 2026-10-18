@@ -57,6 +57,7 @@ add_library(black_glass_engine STATIC
     Vulkan/scene.cpp
     Vulkan/placement.cpp
     Vulkan/walk.cpp
+    Vulkan/viewModel.cpp
     Vulkan/orthoView.cpp
     Vulkan/splash.cpp
     Vulkan/createShadow.cpp

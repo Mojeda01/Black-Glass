@@ -31,6 +31,13 @@ void BlackGlass::uploadModelGeometry(ModelAsset& model, const MeshData& mesh)
     model.indexBuffer = upload(mesh.indices.data(),
                                sizeof(uint32_t) * mesh.indices.size(),
                                VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    if (!mesh.skinVertices.empty())
+    {
+        model.skinBuffer = upload(mesh.skinVertices.data(),
+                                  sizeof(SkinVertex) * mesh.skinVertices.size(),
+                                  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+        model.skeleton = std::make_shared<Skeleton>(mesh.skeleton);
+    }
     model.primitives = mesh.primitives;
 
     std::cout << "  [uploadModelGeometry] SUCCESS - " << mesh.vertices.size() << " vertices, "
