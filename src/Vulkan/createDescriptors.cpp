@@ -154,9 +154,9 @@ void BlackGlass::updateUniformBuffer(uint32_t currentImage)
 {
     auto currentTime = std::chrono::high_resolution_clock::now(); 
     static auto startTime = currentTime;
-    float time = std::chrono::duration<float>(currentTime - startTime).count();
+    double time = std::chrono::duration<double>(currentTime - startTime).count();
 
-    m_deltaTime = std::min(time - m_lastFrameTime, 0.1f);
+    m_deltaTime = static_cast<float>(std::min(time - m_lastFrameTime, 0.1));
     m_lastFrameTime = time;
 
     if (m_walkMode)

@@ -364,7 +364,7 @@ void BlackGlass::toggleUi()
 
 void BlackGlass::beginUiFrame()
 {
-    if (!m_imguiReady || (!m_showUi && !m_quitPrompt && !m_splashActive))
+    if (!m_imguiReady || (!m_showUi && !m_quitPrompt && !m_splashActive && !m_walkMode))
     {
         return;
     }
@@ -955,6 +955,10 @@ void BlackGlass::buildUi()
 
     if (!m_showUi)
     {
+        if (m_walkMode)
+        {
+            drawWalkDebug();
+        }
         drawQuitPrompt();
         return;
     }

@@ -101,6 +101,7 @@ struct CollisionPiece
     float topOffset = 0.0f;
     float slope = 0.0f;
     bool steep = false;
+    float reach = 0.0f;
 };
 
 constexpr uint32_t MAX_POINT_LIGHTS = 16;
@@ -285,7 +286,7 @@ private:
     double m_lastX = 0.0;
     double m_lastY = 0.0;
     float m_deltaTime = 0.0f;
-    float m_lastFrameTime = 0.0f;
+    double m_lastFrameTime = 0.0;
 
     // CORE
     VkInstance M_INSTANCE = VK_NULL_HANDLE;
@@ -508,6 +509,7 @@ private:
     void bakeShadowMap();
     void beginUiFrame();
     void buildUi();
+    void drawWalkDebug();
     void drawQuitPrompt();
     void shutdownImGui();
 

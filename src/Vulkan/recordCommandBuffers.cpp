@@ -1107,7 +1107,7 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
                                 m_debugView != 0 ? 1.0f : 0.0f,
                                 static_cast<float>(m_settings.tonemapper)), false);
 
-    if (m_imguiReady && (m_showUi || m_quitPrompt || m_splashActive))
+    if (m_imguiReady && (m_showUi || m_quitPrompt || m_splashActive || m_walkMode))
     {
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
     }

@@ -4,6 +4,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace
 {
@@ -42,6 +50,163 @@ namespace
     constexpr float FALL_LIMIT = -60.0f;
     constexpr int RESOLVE_PASSES = 4;
     constexpr float STEEP_SLOPE = 1.2f;
+    constexpr float AIR_STEP_HEIGHT = 0.1f;
+    constexpr float NEAR_MARGIN = 1.0f;
+    constexpr float PUSH_EPSILON = 1e-4f;
+
+    constexpr float GRID_CELL = 4.0f;
+    constexpr int GRID_MAX_SPAN = 16;
+
+    std::vector<const CollisionPiece*> g_near;
+
+    struct WalkFrameStats
+    {
+        int blockedSteps = 0;
+        bool unsettled = false;
+        float low = 1e9f;
+        float high = 0.0f;
+        int jumps = 0;
+        int lands = 0;
+        float landSpeed = 0.0f;
+    };
+
+    struct WalkHud
+    {
+        float speed = 0.0f;
+        float low = 0.0f;
+        float high = 0.0f;
+        float vy = 0.0f;
+        bool grounded = false;
+        float accel = 0.0f;
+        size_t nearCount = 0;
+        int steps = 0;
+        int blocked = 0;
+        bool unsettled = false;
+        float dt = 0.0f;
+        glm::vec3 feet{ 0.0f };
+    };
+
+    WalkFrameStats g_frame;
+    WalkHud g_hud;
+    std::ofstream g_log;
+    std::string g_logName;
+    uint32_t g_logRows = 0;
+    double g_hudTime = 0.0;
+    double g_logFlushTime = 0.0;
+
+    void openWalkLog()
+    {
+        std::error_code error;
+        std::filesystem::create_directories(BLACK_GLASS_LOG_DIR, error);
+        std::time_t stamp = std::time(nullptr);
+        char name[64];
+        std::strftime(name, sizeof(name), "walk_%Y%m%d_%H%M%S.csv", std::localtime(&stamp));
+        g_logName = name;
+        g_log.open(std::string(BLACK_GLASS_LOG_DIR) + "/" + name);
+        g_logRows = 0;
+        g_logFlushTime = 0.0;
+        g_frame = WalkFrameStats();
+        if (g_log.is_open())
+        {
+            g_log << "time,rawDt,smoothDt,steps,alpha,speed,stepLow,stepHigh,vx,vy,vz,grounded,accel,near,blockedSteps,unsettled,jumps,lands,landSpeed,feetX,feetY,feetZ,eyeY,camY,bobY,landShown,roll,fovBoost\n";
+        }
+    }
+
+    void closeWalkLog()
+    {
+        if (g_log.is_open())
+        {
+            g_log.close();
+        }
+    }
+    std::unordered_map<int64_t, std::vector<uint32_t>> g_grid;
+    std::vector<uint32_t> g_large;
+    std::vector<uint32_t> g_stamp;
+    uint32_t g_stampId = 0;
+
+    int64_t cellKey(int cx, int cz)
+    {
+        return (static_cast<int64_t>(cx) << 32) ^ static_cast<int64_t>(static_cast<uint32_t>(cz));
+    }
+
+    int cellOf(float value)
+    {
+        return static_cast<int>(std::floor(value / GRID_CELL));
+    }
+
+    void buildGrid(const std::vector<CollisionPiece>& pieces)
+    {
+        g_grid.clear();
+        g_large.clear();
+        g_stamp.assign(pieces.size(), 0);
+        g_stampId = 0;
+        for (uint32_t i = 0; i < pieces.size(); i++)
+        {
+            const CollisionPiece& piece = pieces[i];
+            int x0 = cellOf(piece.center.x - piece.reach);
+            int x1 = cellOf(piece.center.x + piece.reach);
+            int z0 = cellOf(piece.center.y - piece.reach);
+            int z1 = cellOf(piece.center.y + piece.reach);
+            if (x1 - x0 >= GRID_MAX_SPAN || z1 - z0 >= GRID_MAX_SPAN)
+            {
+                g_large.push_back(i);
+                continue;
+            }
+            for (int cx = x0; cx <= x1; cx++)
+            {
+                for (int cz = z0; cz <= z1; cz++)
+                {
+                    g_grid[cellKey(cx, cz)].push_back(i);
+                }
+            }
+        }
+    }
+
+    void gatherNear(const std::vector<CollisionPiece>& pieces, const glm::vec2& at)
+    {
+        g_near.clear();
+        g_stampId++;
+        auto consider = [&](uint32_t index)
+        {
+            if (g_stamp[index] == g_stampId)
+            {
+                return;
+            }
+            g_stamp[index] = g_stampId;
+            const CollisionPiece& piece = pieces[index];
+            glm::vec2 gap = at - piece.center;
+            float limit = piece.reach + PLAYER_RADIUS + NEAR_MARGIN;
+            if (glm::dot(gap, gap) <= limit * limit)
+            {
+                g_near.push_back(&piece);
+            }
+        };
+
+        float span = PLAYER_RADIUS + NEAR_MARGIN;
+        int x0 = cellOf(at.x - span);
+        int x1 = cellOf(at.x + span);
+        int z0 = cellOf(at.y - span);
+        int z1 = cellOf(at.y + span);
+        for (int cx = x0; cx <= x1; cx++)
+        {
+            for (int cz = z0; cz <= z1; cz++)
+            {
+                auto found = g_grid.find(cellKey(cx, cz));
+                if (found == g_grid.end())
+                {
+                    continue;
+                }
+                for (uint32_t index : found->second)
+                {
+                    consider(index);
+                }
+            }
+        }
+        for (uint32_t index : g_large)
+        {
+            consider(index);
+        }
+    }
 
     void smoothDamp(float& value, float& velocity, float target, float smoothTime, float dt)
     {
@@ -92,6 +257,7 @@ namespace
         piece.baseY = position.y;
         piece.topOffset = topOffset;
         piece.slope = slope;
+        piece.reach = glm::length(glm::max(glm::abs(minLocal), glm::abs(maxLocal)));
         return piece;
     }
 }
@@ -182,6 +348,7 @@ void BlackGlass::buildCollision()
         }
         }
     }
+    buildGrid(m_collision);
 }
 
 void BlackGlass::toggleWalkMode(bool fromCamera)
@@ -247,6 +414,7 @@ void BlackGlass::toggleWalkMode(bool fromCamera)
     m_walkLastYaw = m_camera.yaw;
     m_camera.pitch = std::clamp(m_camera.pitch, -60.0f, 60.0f);
     m_walkMode = true;
+    openWalkLog();
     setMouseCaptured(true);
 }
 
@@ -257,6 +425,7 @@ void BlackGlass::exitWalkMode()
         return;
     }
     m_walkMode = false;
+    closeWalkLog();
     m_collision.clear();
     m_camera.roll = 0.0f;
     m_walkFovBoost = 0.0f;
@@ -280,7 +449,7 @@ void BlackGlass::updateWalk(float deltaTime)
     }
     const float frameTime = m_walkSmoothDt;
 
-    m_walkAccumulator += frameTime;
+    m_walkAccumulator += rawTime;
 
     int steps = 0;
     while (m_walkAccumulator >= PHYSICS_STEP && steps < MAX_PHYSICS_STEPS)
@@ -324,7 +493,7 @@ void BlackGlass::updateWalk(float deltaTime)
     m_walkBobAmount += (bobTarget - m_walkBobAmount) * (1.0f - std::exp(-8.0f * frameTime));
 
     float stride = BOB_RADIANS_PER_METER * (1.0f + (BOB_SPRINT_STRIDE - 1.0f) * sprintFraction);
-    m_walkBobPhase += horizontalSpeed * stride * frameTime;
+    m_walkBobPhase += horizontalSpeed * stride * rawTime;
     if (m_walkBobPhase > 6.2831853f * 64.0f)
     {
         m_walkBobPhase -= 6.2831853f * 64.0f;
@@ -363,6 +532,47 @@ void BlackGlass::updateWalk(float deltaTime)
 
     glm::vec3 sideAxis = m_camera.right();
     m_camera.position = glm::vec3(feet.x, m_walkEyeY + m_walkBobY - m_walkLandShown, feet.z) + sideAxis * m_walkBobX;
+
+    double now = glfwGetTime();
+    const float accelInUse = m_walkGrounded ? GROUND_ACCEL : AIR_ACCEL;
+    const float stepLow = g_frame.low > 1e8f ? horizontalSpeed : g_frame.low;
+
+    if (g_log.is_open())
+    {
+        char row[512];
+        std::snprintf(row, sizeof(row),
+                      "%.4f,%.5f,%.5f,%d,%.3f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%.0f,%zu,%d,%d,%d,%d,%.3f,%.4f,%.4f,%.4f,%.4f,%.4f,%.5f,%.5f,%.4f,%.4f\n",
+                      now, rawTime, frameTime, steps, alpha, horizontalSpeed, stepLow, g_frame.high,
+                      m_walkVelocity.x, m_walkVelocity.y, m_walkVelocity.z, m_walkGrounded ? 1 : 0, accelInUse,
+                      g_near.size(), g_frame.blockedSteps, g_frame.unsettled ? 1 : 0, g_frame.jumps, g_frame.lands,
+                      g_frame.landSpeed, feet.x, feet.y, feet.z, m_walkEyeY, m_camera.position.y,
+                      m_walkBobY, m_walkLandShown, m_walkRoll, m_walkFovBoost);
+        g_log << row;
+        g_logRows++;
+        if (now - g_logFlushTime >= 0.5)
+        {
+            g_log.flush();
+            g_logFlushTime = now;
+        }
+    }
+
+    if (now - g_hudTime >= 0.1)
+    {
+        g_hudTime = now;
+        g_hud.speed = horizontalSpeed;
+        g_hud.low = stepLow;
+        g_hud.high = g_frame.high;
+        g_hud.vy = m_walkVelocity.y;
+        g_hud.grounded = m_walkGrounded;
+        g_hud.accel = accelInUse;
+        g_hud.nearCount = g_near.size();
+        g_hud.steps = steps;
+        g_hud.blocked = g_frame.blockedSteps;
+        g_hud.unsettled = g_frame.unsettled;
+        g_hud.dt = frameTime;
+        g_hud.feet = feet;
+    }
+    g_frame = WalkFrameStats();
 }
 
 void BlackGlass::stepWalk(float dt)
@@ -405,11 +615,16 @@ void BlackGlass::stepWalk(float dt)
     glm::vec2 position = startPosition + velocity * dt;
     glm::vec2 intended = position - startPosition;
 
+    const float stepUp = m_walkGrounded ? STEP_HEIGHT : AIR_STEP_HEIGHT;
+    gatherNear(m_collision, startPosition);
+
+    bool settled = false;
     for (int pass = 0; pass < RESOLVE_PASSES; pass++)
     {
         bool moved = false;
-        for (const CollisionPiece& piece : m_collision)
+        for (const CollisionPiece* candidate : g_near)
         {
+            const CollisionPiece& piece = *candidate;
             if (piece.baseY >= feet.y + PLAYER_HEIGHT - 0.01f)
             {
                 continue;
@@ -419,7 +634,7 @@ void BlackGlass::stepWalk(float dt)
             glm::vec2 nearest = glm::clamp(local, piece.minLocal, piece.maxLocal);
             float blockTop = piece.steep ? piece.baseY + piece.topOffset + piece.slope * (piece.maxLocal.y - piece.minLocal.y)
                                          : topAt(piece, nearest.y);
-            if (blockTop <= feet.y + STEP_HEIGHT)
+            if (blockTop <= feet.y + stepUp)
             {
                 continue;
             }
@@ -429,7 +644,7 @@ void BlackGlass::stepWalk(float dt)
             glm::vec2 push(0.0f);
             if (distance > 1e-5f)
             {
-                if (distance >= PLAYER_RADIUS)
+                if (distance >= PLAYER_RADIUS - PUSH_EPSILON)
                 {
                     continue;
                 }
@@ -452,6 +667,7 @@ void BlackGlass::stepWalk(float dt)
         }
         if (!moved)
         {
+            settled = true;
             break;
         }
     }
@@ -459,6 +675,19 @@ void BlackGlass::stepWalk(float dt)
     if (glm::dot(actual, actual) < glm::dot(intended, intended) - 1e-10f)
     {
         velocity = actual / dt;
+    }
+    if (!settled)
+    {
+        g_frame.unsettled = true;
+    }
+    if (glm::dot(actual, actual) < glm::dot(intended, intended) - 1e-10f)
+    {
+        g_frame.blockedSteps++;
+    }
+    {
+        float stepSpeed = glm::length(velocity);
+        g_frame.high = std::max(g_frame.high, stepSpeed);
+        g_frame.low = std::min(g_frame.low, stepSpeed);
     }
     m_walkVelocity.x = velocity.x;
     m_walkVelocity.z = velocity.y;
@@ -469,8 +698,9 @@ void BlackGlass::stepWalk(float dt)
         float ground = FLOOR_HEIGHT;
         const float reach = PLAYER_RADIUS * 0.8f;
         const glm::vec2 samples[5] = { { 0.0f, 0.0f }, { reach, 0.0f }, { -reach, 0.0f }, { 0.0f, reach }, { 0.0f, -reach } };
-        for (const CollisionPiece& piece : m_collision)
+        for (const CollisionPiece* candidate : g_near)
         {
+            const CollisionPiece& piece = *candidate;
             for (const glm::vec2& sample : samples)
             {
                 glm::vec2 local = toLocal(piece, position + sample);
@@ -479,7 +709,7 @@ void BlackGlass::stepWalk(float dt)
                     continue;
                 }
                 float top = topAt(piece, local.y);
-                if (top <= referenceFeet + STEP_HEIGHT + 1e-3f)
+                if (top <= referenceFeet + stepUp)
                 {
                     ground = std::max(ground, top);
                 }
@@ -497,6 +727,7 @@ void BlackGlass::stepWalk(float dt)
         {
             m_walkVelocity.y = JUMP_SPEED;
             m_walkGrounded = false;
+            g_frame.jumps++;
         }
     }
     else
@@ -507,8 +738,9 @@ void BlackGlass::stepWalk(float dt)
 
         if (m_walkVelocity.y > 0.0f)
         {
-            for (const CollisionPiece& piece : m_collision)
+            for (const CollisionPiece* candidate : g_near)
             {
+                const CollisionPiece& piece = *candidate;
                 if (piece.baseY < feet.y + PLAYER_HEIGHT - 0.01f || piece.baseY >= next + PLAYER_HEIGHT)
                 {
                     continue;
@@ -526,6 +758,8 @@ void BlackGlass::stepWalk(float dt)
         if (next <= ground && m_walkVelocity.y <= 0.0f)
         {
             m_walkLandImpact = std::max(m_walkLandImpact, -m_walkVelocity.y);
+            g_frame.lands++;
+            g_frame.landSpeed = std::max(g_frame.landSpeed, -m_walkVelocity.y);
             feet.y = ground;
             m_walkVelocity.y = 0.0f;
             m_walkGrounded = true;
@@ -544,4 +778,23 @@ void BlackGlass::stepWalk(float dt)
         m_walkPrevFeet = feet;
         m_walkEyeValid = false;
     }
+}
+
+void BlackGlass::drawWalkDebug()
+{
+    ImGui::SetNextWindowPos(ImVec2(12.0f, 12.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.5f);
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+                             ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+                             ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
+    if (ImGui::Begin("##walkdebug", nullptr, flags))
+    {
+        ImGui::Text("speed  %.2f  (step lo %.2f  hi %.2f)", g_hud.speed, g_hud.low, g_hud.high);
+        ImGui::Text("vy     %.2f   %s   accel %.0f", g_hud.vy, g_hud.grounded ? "GROUND" : "AIR", g_hud.accel);
+        ImGui::Text("near %zu   blocked %d   unsettled %d   steps %d", g_hud.nearCount, g_hud.blocked,
+                    g_hud.unsettled ? 1 : 0, g_hud.steps);
+        ImGui::Text("dt %.4f   feet %.2f %.2f %.2f", g_hud.dt, g_hud.feet.x, g_hud.feet.y, g_hud.feet.z);
+        ImGui::Text("log/%s  (%u rows)", g_logName.c_str(), g_logRows);
+    }
+    ImGui::End();
 }
