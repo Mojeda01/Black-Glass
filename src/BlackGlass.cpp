@@ -1,5 +1,8 @@
 #include "BlackGlass.h"
 #include "Editor/Editor.h"
+#include "Debug/StateLog.h"
+#include "Debug/DisplayTiming.h"
+#include "Debug/CocoaProbe.h"
 #include <iostream>
 #include <stdexcept>
 
@@ -15,24 +18,68 @@ BlackGlass::~BlackGlass()
 {
     std::cout << "[BlackGlass] Destructor called\n";
     cleanup();
+    FrameLog::close();
+    shutdownCocoaProbe();
+    StateLog::close();
 }
 
 
+FrameLogView BlackGlass::frameLogView() const
+{
+    FrameLogView view;
+    view.extentW = M_SWAPCHAINEXTENT.width;
+    view.extentH = M_SWAPCHAINEXTENT.height;
+    glfwGetFramebufferSize(m_window, &view.fbW, &view.fbH);
+    glfwGetWindowSize(m_window, &view.winW, &view.winH);
+    switch (M_PRESENTMODE)
+    {
+        case VK_PRESENT_MODE_IMMEDIATE_KHR: view.presentMode = "IMMEDIATE"; break;
+        case VK_PRESENT_MODE_MAILBOX_KHR: view.presentMode = "MAILBOX"; break;
+        case VK_PRESENT_MODE_FIFO_KHR: view.presentMode = "FIFO"; break;
+        case VK_PRESENT_MODE_FIFO_RELAXED_KHR: view.presentMode = "FIFO_RELAXED"; break;
+        default: view.presentMode = "OTHER"; break;
+    }
+    view.imageCount = static_cast<uint32_t>(M_SWAPCHAINIMAGES.size());
+    return view;
+}
+
 void BlackGlass::drawFrame()
 {
+    paceFrame();
+
+    static double lastFrameStart = 0.0;
+    const double frameStart = glfwGetTime();
+    FrameLogSample sample;
+    sample.time = frameStart;
+    sample.frameMs = lastFrameStart > 0.0 ? (frameStart - lastFrameStart) * 1000.0 : 0.0;
+    sample.frameSlot = M_CURRENTFRAME;
+    lastFrameStart = frameStart;
+
     // wait for the GPU to finish with this frame-in-flight slot's resources
     // before reusing its command buffer.
     vkWaitForFences(M_DEVICE, 1, &M_INFLIGHTFENCES[M_CURRENTFRAME], VK_TRUE, UINT64_MAX);
     collectGpuTimings(M_CURRENTFRAME);
+    const double fenceDone = glfwGetTime();
+    sample.fenceMs = (fenceDone - frameStart) * 1000.0;
 
-    uint32_t imageIndex;
+    uint32_t imageIndex = 0;
     VkResult result = vkAcquireNextImageKHR(
         M_DEVICE, M_SWAPCHAIN, UINT64_MAX,
         M_IMAGEAVAILABLESEMAPHORES[M_CURRENTFRAME], VK_NULL_HANDLE, &imageIndex
     );
+    const double acquireDone = glfwGetTime();
+    sample.acquireMs = (acquireDone - fenceDone) * 1000.0;
+    sample.acquireResult = static_cast<int>(result);
+    sample.imageIndex = imageIndex;
+
+    if (result == VK_SUBOPTIMAL_KHR)
+    {
+        FrameLog::event("acquire_suboptimal", acquireDone, 0.0, frameLogView());
+    }
 
     if(result == VK_ERROR_OUT_OF_DATE_KHR)
     {
+        FrameLog::event("acquire_out_of_date", acquireDone, 0.0, frameLogView());
         recreateSwapchain();
         return;
     } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
@@ -69,7 +116,11 @@ void BlackGlass::drawFrame()
         m_shadowDirty = false;
     }
     updateUniformBuffer(M_CURRENTFRAME);
+    const double recordStart = glfwGetTime();
     recordCommandBuffers(M_COMMANDBUFFERS[M_CURRENTFRAME], imageIndex);
+    const double recordDone = glfwGetTime();
+    sample.updateMs = (recordStart - acquireDone) * 1000.0;
+    sample.recordMs = (recordDone - recordStart) * 1000.0;
 
     VkSemaphore waitSemaphores[] = { M_IMAGEAVAILABLESEMAPHORES[M_CURRENTFRAME] };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
@@ -90,6 +141,10 @@ void BlackGlass::drawFrame()
         throw std::runtime_error("Failed to submit draw command buffer!");
     }
 
+    const double cpuDone = glfwGetTime();
+    sample.cpuMs = (cpuDone - acquireDone) * 1000.0;
+    sample.submitMs = (cpuDone - recordDone) * 1000.0;
+
     VkSwapchainKHR swapchains[] = { M_SWAPCHAIN };
 
     VkPresentInfoKHR presentInfo{};
@@ -101,9 +156,29 @@ void BlackGlass::drawFrame()
     presentInfo.pImageIndices = &imageIndex;
 
     result = vkQueuePresentKHR(M_PRESENTQUEUE, &presentInfo);
+    const double presentDone = glfwGetTime();
+    sample.presentMs = (presentDone - cpuDone) * 1000.0;
+    sample.presentResult = static_cast<int>(result);
+    sample.presentAt = presentDone;
+    sample.camX = m_camera.position.x;
+    sample.camY = m_camera.position.y;
+    sample.camZ = m_camera.position.z;
+    sample.camYaw = m_camera.yaw;
+    sample.camPitch = m_camera.pitch;
+    CameraPose pose;
+    pose.x = m_camera.position.x;
+    pose.y = m_camera.position.y;
+    pose.z = m_camera.position.z;
+    pose.yaw = m_camera.yaw;
+    pose.pitch = m_camera.pitch;
+    sample.phase = DisplayTiming::notePresent(presentDone, pose);
+    FrameLog::frame(sample, frameLogView());
+    updateStateLog();
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_framebufferResized)
     {
+        FrameLog::event(m_framebufferResized ? "present_resize_flag" : "present_out_of_date_or_suboptimal",
+                        presentDone, 0.0, frameLogView());
         m_framebufferResized = false;
         recreateSwapchain();
     }

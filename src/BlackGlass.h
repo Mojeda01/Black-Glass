@@ -9,6 +9,7 @@
 #include "Editor/Brush.h"
 #include "Editor/Light.h"
 #include "Debug/DebugDraw.h"
+#include "Debug/FrameLog.h"
 #include "RenderSettings.h"
 
 #include <vector>
@@ -154,10 +155,14 @@ constexpr VkFormat SHADOW_FORMAT = VK_FORMAT_D32_SFLOAT;
 constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
 // validation layer code.
+#ifdef BLACK_GLASS_VALIDATION
 const std::vector<const char*> VALIDATION_LAYERS = 
 {
     "VK_LAYER_KHRONOS_validation"
 };
+#else
+const std::vector<const char*> VALIDATION_LAYERS = {};
+#endif
 
 // Device extensions
 const std::vector<const char*> DEVICE_EXTENSIONS = 
@@ -207,6 +212,7 @@ public:
     bool uiWantsKeyboard() const;
     void toggleMouseCapture();
     void toggleUi();
+    void markFrameLog() { FrameLog::event("mark", glfwGetTime(), 0.0, frameLogView()); }
     void requestQuit();
     bool quitPromptOpen() const { return m_quitPrompt; }
     void cancelQuitPrompt() { m_quitPrompt = false; }
@@ -232,6 +238,9 @@ public:
 private:
     GLFWwindow* m_window = nullptr;
     bool m_framebufferResized = false;
+    double m_paceNext = 0.0;
+    double m_paceInterval = 0.0;
+    double m_paceChecked = -1.0;
 
     Camera m_camera{};
     bool m_firstMouse = true;
@@ -309,6 +318,8 @@ private:
     std::vector<VkImageView> M_SWAPCHAINIMAGEVIEWS;
     VkFormat M_SWAPCHAINIMAGEFORMAT{};
     VkExtent2D M_SWAPCHAINEXTENT{};
+    VkPresentModeKHR M_PRESENTMODE = VK_PRESENT_MODE_FIFO_KHR;
+    FrameLogView frameLogView() const;
 
     // DEPTH
     AllocatedImage M_DEPTHIMAGE{};
@@ -489,6 +500,8 @@ private:
     void createSwapchain();     // done
     void createImageViews();    // done 
     void recreateSwapchain();
+    void updateStateLog();
+    void paceFrame();
     void cleanupSwapchain();
     void createDepthResources();
     void pickMsaaSamples();

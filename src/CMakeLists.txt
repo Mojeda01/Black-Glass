@@ -73,6 +73,11 @@ add_library(black_glass_engine STATIC
     Vulkan/editorHost.cpp
     Vulkan/createDebugDraw.cpp
     Debug/DebugDraw.cpp
+    Debug/FrameLog.cpp
+    Debug/StateLog.cpp
+    Debug/DisplayTiming.cpp
+    Vulkan/stateLog.cpp
+    Vulkan/framePacing.cpp
     Editor/BrushTool.cpp
     Editor/BrushHandles.cpp
     Editor/RotationGizmo.cpp
@@ -94,6 +99,17 @@ target_link_libraries(black_glass_engine PUBLIC
     Vulkan::Vulkan
     glfw
 )
+
+if(BLACK_GLASS_VALIDATION)
+    target_compile_definitions(black_glass_engine PUBLIC BLACK_GLASS_VALIDATION=1)
+endif()
+
+if(APPLE AND BLACK_GLASS_COCOA_PROBE)
+    target_sources(black_glass_engine PRIVATE Debug/CocoaProbe.mm)
+    target_link_libraries(black_glass_engine PUBLIC "-framework Cocoa" "-framework CoreVideo")
+else()
+    target_sources(black_glass_engine PRIVATE Debug/CocoaProbeStub.cpp)
+endif()
 
 if(APPLE)
     target_link_libraries(black_glass_engine PUBLIC

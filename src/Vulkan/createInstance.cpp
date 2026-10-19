@@ -8,7 +8,7 @@ void BlackGlass::createInstance()
 {
     std::cout << " [createInstance] Starting... \n"; 
  
-    std::cout << "   [createInstance] Validation layers ENABLED\n"; 
+    std::cout << "   [createInstance] Validation layers " << (VALIDATION_LAYERS.empty() ? "DISABLED" : "ENABLED") << "\n";
 
     // app info.
     VkApplicationInfo appInfo{};

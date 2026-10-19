@@ -37,6 +37,9 @@ void BlackGlass::recreateSwapchain()
         glfwWaitEvents();
     }
 
+    const double rebuildStart = glfwGetTime();
+    FrameLog::event("recreate_begin", rebuildStart, 0.0, frameLogView());
+
     vkDeviceWaitIdle(M_DEVICE);
 
     cleanupSwapchain();
@@ -58,6 +61,9 @@ void BlackGlass::recreateSwapchain()
             throw std::runtime_error("Failed to recreate render-finished semaphore!");
         }
     }
+
+    const double rebuildEnd = glfwGetTime();
+    FrameLog::event("recreate_end", rebuildEnd, (rebuildEnd - rebuildStart) * 1000.0, frameLogView());
 
     std::cout << "  [recreateSwapchain] Rebuilt at " << M_SWAPCHAINEXTENT.width
               << "x" << M_SWAPCHAINEXTENT.height << " with "

@@ -164,6 +164,11 @@ void initBlackGlass() {
                     {
                         return;
                     }
+                    if (r && action == GLFW_PRESS && key == GLFW_KEY_O && !(mods & (GLFW_MOD_SUPER | GLFW_MOD_CONTROL)))
+                    {
+                        r->markFrameLog();
+                        return;
+                    }
                     if (r && action == GLFW_PRESS && key == GLFW_KEY_P && !(mods & (GLFW_MOD_SUPER | GLFW_MOD_CONTROL)))
                     {
                         r->toggleWalkMode((mods & GLFW_MOD_SHIFT) != 0);

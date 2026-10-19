@@ -1,4 +1,5 @@
 #include "BlackGlass.h"
+#include "Debug/StateLog.h"
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -7,6 +8,8 @@
 void BlackGlass::initVulkan()
 {
     std::cout << "[BlackGlass::initVulkan()]:: Started \n";
+    FrameLog::open();
+    StateLog::open();
 
     std::cout << "→ createInstance()\n";
     createInstance();
@@ -96,4 +99,7 @@ void BlackGlass::initVulkan()
     refreshScene();
     createShadowMap();
     m_shadowDirty = false;
+
+    std::cout << "→ loadViewModel()\n";
+    loadViewModel();
 }

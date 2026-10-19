@@ -118,6 +118,7 @@ void BlackGlass::createSwapchain()
 
     M_SWAPCHAINIMAGEFORMAT = surfaceFormat.format;
     M_SWAPCHAINEXTENT = extent;
+    M_PRESENTMODE = presentMode;
 
     std::cout << "  [createSwapchain] SUCCESS --- Swapchain created with " << imageCount << " images. \n";
 }

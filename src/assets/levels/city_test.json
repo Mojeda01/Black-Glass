@@ -1049,16 +1049,866 @@
       "texture": "Concrete",
       "textureScale": 2.0,
       "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 44",
+      "position": [
+        -22.75,
+        12.000000953674316,
+        5.625
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        1.5,
+        9.499999046325684,
+        18.25
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 44",
+      "position": [
+        -11.5,
+        12.000000953674316,
+        -0.25
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        1.5,
+        9.499999046325684,
+        6.5
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 45",
+      "position": [
+        -17.125,
+        12.000000953674316,
+        -2.75
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        9.75,
+        9.499999046325684,
+        1.5
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 44",
+      "position": [
+        -11.5,
+        12.000000953674316,
+        10.125
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        1.5,
+        9.499999046325684,
+        9.25
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 45",
+      "position": [
+        -17.125,
+        12.000000953674316,
+        14.0
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        9.75,
+        9.499999046325684,
+        1.5
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 46",
+      "position": [
+        -11.516942024230957,
+        14.5,
+        4.242228031158447
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        1.5,
+        6.999999046325684,
+        2.5
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 47",
+      "position": [
+        -15.13347053527832,
+        12.000000953674316,
+        6.25
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        5.733057975769043,
+        2.4999990463256836,
+        0.5
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 47",
+      "position": [
+        -21.0,
+        12.000000953674316,
+        6.25
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        1.9999990463256836,
+        2.4999990463256836,
+        0.5
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 48",
+      "position": [
+        -17.125,
+        14.5,
+        2.25
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        9.75,
+        0.5,
+        8.5
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 49",
+      "position": [
+        -17.125,
+        12.000000953674316,
+        2.25
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        9.75,
+        2.4999990463256836,
+        0.5
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 50",
+      "position": [
+        -20.75,
+        12.000000953674316,
+        9.875
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        0.5,
+        2.9999990463256836,
+        6.75
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 51",
+      "position": [
+        -14.88347053527832,
+        12.000000953674316,
+        9.0
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        5.233057975769043,
+        2.9999990463256836,
+        5.0
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 52",
+      "position": [
+        -12.875,
+        11.949997901916504,
+        12.364049911499023
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        1.25,
+        3.050002098083496,
+        1.7280998229980469
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Stairs 53",
+      "position": [
+        -15.375,
+        12.000001907348633,
+        12.375
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Stairs",
+      "size": [
+        1.75,
+        2.999998092651367,
+        4.25
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 90.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 54",
+      "position": [
+        -21.5,
+        14.5,
+        9.864049911499023
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        1.0,
+        0.5,
+        6.728099822998047
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 55",
+      "position": [
+        -19.0,
+        14.75,
+        9.875
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        3.0,
+        0.25,
+        6.75
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 56",
+      "position": [
+        -17.75,
+        15.0,
+        12.114049911499023
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        0.5,
+        2.5,
+        2.228099822998047
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 57",
+      "position": [
+        -15.625,
+        15.0,
+        11.25
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        3.75,
+        2.5,
+        0.5
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 58",
+      "position": [
+        -14.0,
+        14.999998092651367,
+        10.125
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        0.5,
+        2.500001907348633,
+        1.75
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 59",
+      "position": [
+        -15.125,
+        17.5,
+        12.114049911499023
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        5.75,
+        0.25,
+        2.228099822998047
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 60",
+      "position": [
+        -13.25,
+        17.5,
+        10.125
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        1.9999990463256836,
+        0.25,
+        1.75
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 61",
+      "position": [
+        -20.0,
+        15.0,
+        12.114049911499023
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        4.0,
+        2.75,
+        2.228099822998047
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 62",
+      "position": [
+        -18.125,
+        15.0,
+        10.125
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        7.75,
+        2.75,
+        1.75
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 62",
+      "position": [
+        -13.625,
+        15.0,
+        7.25
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        2.75,
+        2.75,
+        0.5
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 62",
+      "position": [
+        -18.25,
+        15.0,
+        7.25
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        4.5,
+        2.75,
+        0.5
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 63",
+      "position": [
+        -17.75,
+        15.0,
+        6.0
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        0.5,
+        2.75,
+        2.0
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 62",
+      "position": [
+        -15.125,
+        15.0,
+        4.75
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        5.75,
+        2.75,
+        0.5
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 64",
+      "position": [
+        -15.5,
+        17.0,
+        7.25
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        1.0,
+        0.7500009536743164,
+        0.5
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 65",
+      "position": [
+        -20.25,
+        15.0,
+        5.25
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        0.5,
+        2.75,
+        3.5
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 66",
+      "position": [
+        -16.375,
+        15.0,
+        3.25
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        8.25,
+        2.75,
+        0.5
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 67",
+      "position": [
+        -17.875,
+        15.0,
+        0.625
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        8.25,
+        2.75,
+        1.75
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 68",
+      "position": [
+        -21.5,
+        15.0,
+        -1.125
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        1.0,
+        2.75,
+        1.75
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Stairs 69",
+      "position": [
+        -17.375,
+        15.0,
+        -1.125
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Stairs",
+      "size": [
+        1.75,
+        2.75,
+        7.25
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": -90.0
+    },
+    {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "metallic": 0.0,
+      "name": "Box 70",
+      "position": [
+        -17.13347053527832,
+        17.749998092651367,
+        6.489049911499023
+      ],
+      "roughness": 0.6000000238418579,
+      "shape": "Box",
+      "size": [
+        9.733057975769043,
+        0.2500019073486328,
+        13.478099822998047
+      ],
+      "steps": 8,
+      "texture": "Grid",
+      "textureScale": 2.0,
+      "yaw": 0.0
     }
   ],
   "camera": {
-    "pitch": -10.500473022460938,
+    "pitch": -30.20068359375,
     "position": [
-      5.825328350067139,
-      5.136092185974121,
-      -11.649824142456055
+      -18.78565216064453,
+      22.496017456054688,
+      -3.010930299758911
     ],
-    "yaw": -2962.9189453125
+    "yaw": -3529.143798828125
   },
   "lights": [],
   "models": [
