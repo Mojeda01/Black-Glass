@@ -496,12 +496,79 @@ SkyOutput skyVertex(uint vid : SV_VertexID)
     return output;
 }
 
+float skyHash(float2 p)
+{
+    p = frac(p * float2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return frac(p.x * p.y);
+}
+
+float skyNoise(float2 p)
+{
+    float2 i = floor(p);
+    float2 f = frac(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = skyHash(i);
+    float b = skyHash(i + float2(1.0, 0.0));
+    float c = skyHash(i + float2(0.0, 1.0));
+    float d = skyHash(i + float2(1.0, 1.0));
+    return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+}
+
+float skyFbm(float2 p)
+{
+    float value = 0.0;
+    float amplitude = 0.5;
+    for (int i = 0; i < 5; i++)
+    {
+        value += amplitude * skyNoise(p);
+        p = p * 2.03 + float2(17.1, 9.2);
+        amplitude *= 0.5;
+    }
+    return value;
+}
+
+float3 deepBlueSky(float3 dir)
+{
+    float3 horizon = float3(0.22, 0.60, 0.91);
+    float3 low = float3(0.016, 0.22, 0.79);
+    float3 mid = float3(0.0004, 0.06, 0.58);
+    float3 high = float3(0.0001, 0.0087, 0.26);
+    float3 zenith = float3(0.0, 0.0, 0.05);
+
+    float e = saturate(dir.y);
+    float3 sky = lerp(horizon, low, smoothstep(0.0, 0.12, e));
+    sky = lerp(sky, mid, smoothstep(0.08, 0.35, e));
+    sky = lerp(sky, high, smoothstep(0.30, 0.65, e));
+    sky = lerp(sky, zenith, smoothstep(0.60, 1.0, e));
+
+    float below = smoothstep(0.0, -0.45, dir.y);
+    sky = lerp(sky, horizon * 0.35, below);
+
+    if (dir.y > 0.02)
+    {
+        float2 uv = dir.xz / (dir.y + 0.12);
+        float2 p = uv * float2(0.9, 3.2);
+        float warp = skyFbm(p * 0.6 + float2(3.1, 7.4));
+        float shape = skyFbm(p + warp * 1.6);
+        float wisp = smoothstep(0.58, 0.82, shape);
+        float band = smoothstep(0.03, 0.18, dir.y) * (1.0 - smoothstep(0.30, 0.60, dir.y));
+        float density = wisp * band * 0.55;
+        float3 cloud = float3(0.86, 0.93, 1.0);
+        sky = lerp(sky, cloud, density);
+    }
+    return sky;
+}
+
 [shader("fragment")]
 float4 skyFragment(SkyOutput input) : SV_Target
 {
     if (int(frame.debugParams.x + 0.5) != 0)
         return float4(0.0, 0.0, 0.0, 1.0);
 
-    float3 color = envMap.SampleLevel(normalize(input.dir), 0.0).rgb * frame.iblParams.y;
+    float3 viewDir = normalize(input.dir);
+    float3 color = frame.iblParams.z > 0.5
+        ? deepBlueSky(viewDir) * frame.iblParams.y
+        : envMap.SampleLevel(viewDir, 0.0).rgb * frame.iblParams.y;
     return float4(min(color, float3(60.0, 60.0, 60.0)), 1.0);
 }
