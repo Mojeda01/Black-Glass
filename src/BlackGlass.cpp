@@ -113,8 +113,13 @@ void BlackGlass::drawFrame()
         vkDeviceWaitIdle(M_DEVICE);
         refreshScene();
         bakeShadowMap();
+        m_lightShadowsStale = true;
+        m_ambientDirty = true;
+        m_ambientDirtyTime = glfwGetTime();
         m_shadowDirty = false;
     }
+    updateLightShadows();
+    updateAmbient();
     updateUniformBuffer(M_CURRENTFRAME);
     const double recordStart = glfwGetTime();
     recordCommandBuffers(M_COMMANDBUFFERS[M_CURRENTFRAME], imageIndex);
@@ -226,6 +231,8 @@ void BlackGlass::cleanup()
     }
     destroyImage(M_FALLBACKTEXTURE);
 
+    destroyAmbientVolume();
+    destroyLightShadowMap();
     destroyImage(M_SHADOWMAP);
     if (M_SHADOWSAMPLER != VK_NULL_HANDLE)
     {

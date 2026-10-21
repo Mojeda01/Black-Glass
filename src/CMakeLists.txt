@@ -61,6 +61,8 @@ add_library(black_glass_engine STATIC
     Vulkan/orthoView.cpp
     Vulkan/splash.cpp
     Vulkan/createShadow.cpp
+    Vulkan/lightShadow.cpp
+    Vulkan/ambientVolume.cpp
     Vulkan/ui.cpp
     Vulkan/vmaImpl.cpp
     imgui/imgui.cpp

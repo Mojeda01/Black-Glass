@@ -18,6 +18,11 @@ struct FrameData {
     float4 lightPositions[16];
     float4 lightColors[16];
     float4 lightDirections[16];
+    float4 lightShadowInfo[16];
+    float4x4 lightShadowViewProj[24];
+    float4 volumeMin;
+    float4 volumeInvExtent;
+    float4 volumeParams;
     float4x4 jointMatrices[128];
 };
 
@@ -92,6 +97,15 @@ Sampler2D aoTex;
 
 [[vk::binding(14, 0)]]
 Sampler2D reflectionTex;
+
+[[vk::binding(15, 0)]]
+Sampler2DArrayShadow lightShadowMap;
+
+[[vk::binding(16, 0)]]
+Sampler3D ambientVolumeA;
+
+[[vk::binding(17, 0)]]
+Sampler3D ambientVolumeB;
 
 struct VSInput {
     float3 pos      : POSITION;
@@ -197,6 +211,72 @@ float shadowFactor(float3 worldPos, float3 geometricNormal)
         for (int x = -1; x <= 1; x++)
         {
             sum += shadowMap.SampleCmpLevelZero(uv + float2(float(x), float(y)) * texel, ndc.z);
+        }
+    }
+    return sum / 9.0;
+}
+
+float ambientVisibility(float3 worldPos, float3 geometricNormal, float3 dir)
+{
+    if (frame.volumeParams.x < 0.5)
+        return 1.0;
+
+    float3 p = worldPos + geometricNormal * (frame.volumeMin.w * 1.1);
+    float3 uvw = (p - frame.volumeMin.xyz) * frame.volumeInvExtent.xyz;
+    if (uvw.x < 0.0 || uvw.x > 1.0 || uvw.y < 0.0 || uvw.y > 1.0 || uvw.z < 0.0 || uvw.z > 1.0)
+        return 1.0;
+
+    float4 a = ambientVolumeA.SampleLevel(uvw, 0.0);
+    float4 b = ambientVolumeB.SampleLevel(uvw, 0.0);
+
+    float3 w = dir * dir;
+    float vx = dir.x >= 0.0 ? a.x : a.y;
+    float vy = dir.y >= 0.0 ? a.z : a.w;
+    float vz = dir.z >= 0.0 ? b.x : b.y;
+    float visibility = vx * vx * w.x + vy * vy * w.y + vz * vz * w.z;
+
+    return lerp(frame.volumeParams.y, 1.0, saturate(visibility));
+}
+
+float lightShadow(int li, float3 worldPos, float3 geometricNormal)
+{
+    float4 info = frame.lightShadowInfo[li];
+    if (info.x < -0.5)
+        return 1.0;
+
+    float3 lightPos = frame.lightPositions[li].xyz;
+    float3 p = worldPos + geometricNormal * (distance(worldPos, lightPos) * info.y);
+    float3 v = p - lightPos;
+    float3 av = abs(v);
+
+    int face = 0;
+    if (frame.lightDirections[li].w < -1.5)
+    {
+        if (av.x >= av.y && av.x >= av.z)
+            face = v.x > 0.0 ? 0 : 1;
+        else if (av.y >= av.z)
+            face = v.y > 0.0 ? 2 : 3;
+        else
+            face = v.z > 0.0 ? 4 : 5;
+    }
+
+    int layer = int(info.x + 0.5) * 6 + face;
+    float4 clip = mul(frame.lightShadowViewProj[layer], float4(p, 1.0));
+    if (clip.w <= 0.0)
+        return 1.0;
+
+    float3 ndc = clip.xyz / clip.w;
+    float2 uv = ndc.xy * 0.5 + 0.5;
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || ndc.z < 0.0 || ndc.z > 1.0)
+        return 1.0;
+
+    float sum = 0.0;
+    for (int y = -1; y <= 1; y++)
+    {
+        for (int x = -1; x <= 1; x++)
+        {
+            float2 tap = uv + float2(float(x), float(y)) * info.z;
+            sum += lightShadowMap.SampleCmpLevelZero(float3(tap, float(layer)), ndc.z);
         }
     }
     return sum / 9.0;
@@ -344,7 +424,10 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
             float3 Fp = F0 + (1.0 - F0) * pow(1.0 - VdotHp, 5.0);
             float3 specP = Dp * Gp * Fp / (4.0 * NdotV * NdotLp + 1e-4);
             float3 kdP = (1.0 - Fp) * (1.0 - metallic);
-            float3 lightRadiance = frame.lightColors[li].rgb * attenuation;
+            float lightVisibility = 1.0;
+            if (NdotLp > 0.0)
+                lightVisibility = lightShadow(li, input.worldPos, Ng);
+            float3 lightRadiance = frame.lightColors[li].rgb * attenuation * lightVisibility;
             diffuseLo += kdP * baseColor.rgb / PI * lightRadiance * NdotLp;
             specularLo += specP * lightRadiance * NdotLp;
         }
@@ -358,9 +441,11 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     float3 envBrdf = F0 * brdf.x + brdf.y;
     float specOcc = saturate(pow(NdotV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao);
     float3 prefiltered = prefilterMap.SampleLevel(R, roughness * frame.iblParams.x).rgb;
-    float3 specularIBL = prefiltered * envBrdf * specOcc * frame.iblParams.y;
+    float diffuseVis = ambientVisibility(input.worldPos, Ng, N);
+    float specularVis = ambientVisibility(input.worldPos, Ng, R);
+    float3 specularIBL = prefiltered * envBrdf * specOcc * frame.iblParams.y * specularVis;
     float3 diffuseIBL = irradianceMap.SampleLevel(N, 0.0).rgb * baseColor.rgb
-                        * saturate(1.0 - envBrdf) * (1.0 - metallic) * ao * frame.iblParams.y;
+                        * saturate(1.0 - envBrdf) * (1.0 - metallic) * ao * frame.iblParams.y * diffuseVis;
 
     if (isGround)
     {
@@ -464,6 +549,7 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     if (debugView == 7) return float4(saturate(diffuseIBL + Lo), 1.0);
     if (debugView == 8) return float4(frontFacing ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0), 1.0);
     if (debugView == 9) return float4(normalize(input.normal) * 0.5 + 0.5, 1.0);
+    if (debugView == 10) return float4(diffuseVis, diffuseVis, diffuseVis, 1.0);
 
     if (isGround)
     {

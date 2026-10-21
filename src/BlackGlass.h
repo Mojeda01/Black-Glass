@@ -110,6 +110,67 @@ struct CollisionPiece
 
 constexpr uint32_t MAX_POINT_LIGHTS = 16;
 constexpr uint32_t MAX_JOINTS = 128;
+constexpr uint32_t LIGHT_SHADOW_MAX = 4;
+constexpr uint32_t LIGHT_SHADOW_FACES = 6;
+constexpr uint32_t LIGHT_SHADOW_LAYERS = LIGHT_SHADOW_MAX * LIGHT_SHADOW_FACES;
+constexpr uint32_t LIGHT_SHADOW_SIZE = 512;
+
+struct LightShadowState
+{
+    const Model* model = nullptr;
+    bool baked = false;
+    bool spot = false;
+    glm::vec3 position{ 0.0f };
+    float radius = 0.0f;
+    glm::vec3 direction{ 0.0f, -1.0f, 0.0f };
+    float outer = 0.0f;
+    float normalOffset = 0.0f;
+    std::array<glm::mat4, LIGHT_SHADOW_FACES> viewProj{};
+
+    bool matches(const LightShadowState& other) const
+    {
+        return spot == other.spot && position == other.position && radius == other.radius &&
+               direction == other.direction && outer == other.outer;
+    }
+};
+
+struct LightShadowJob
+{
+    uint32_t layer = 0;
+    glm::mat4 viewProj{ 1.0f };
+    bool draw = false;
+    glm::vec3 center{ 0.0f };
+    float radius = 0.0f;
+};
+
+constexpr uint32_t AMBIENT_DIRECTIONS = 64;
+constexpr uint32_t AMBIENT_DIRS_PER_STEP = 2;
+constexpr uint32_t AMBIENT_DEPTH_SIZE = 2048;
+constexpr uint32_t AMBIENT_MAX_VOXELS = 2097152;
+
+struct AmbientVolume
+{
+    AllocatedImage imageA{};
+    AllocatedImage imageB{};
+};
+
+struct AmbientBakeParams
+{
+    glm::mat4 viewProj[AMBIENT_DIRS_PER_STEP];
+    glm::vec4 direction[AMBIENT_DIRS_PER_STEP];
+    glm::vec4 volumeMin;
+    glm::uvec4 dims;
+    glm::vec4 invAxisWeight[2];
+};
+
+struct AmbientStep
+{
+    bool active = false;
+    bool first = false;
+    bool last = false;
+    uint32_t count = 0;
+    uint32_t target = 0;
+};
 
 struct UniformBufferObject 
 {
@@ -132,6 +193,11 @@ struct UniformBufferObject
     glm::vec4 lightPositions[MAX_POINT_LIGHTS];
     glm::vec4 lightColors[MAX_POINT_LIGHTS];
     glm::vec4 lightDirections[MAX_POINT_LIGHTS];
+    glm::vec4 lightShadowInfo[MAX_POINT_LIGHTS];
+    glm::mat4 lightShadowViewProj[LIGHT_SHADOW_LAYERS];
+    glm::vec4 volumeMin;
+    glm::vec4 volumeInvExtent;
+    glm::vec4 volumeParams;
     glm::mat4 jointMatrices[MAX_JOINTS];
 };
 
@@ -146,7 +212,10 @@ constexpr uint32_t SHADOW_BINDING_INDEX = 2 + MATERIAL_TEXTURE_SLOTS + IBL_TEXTU
 constexpr uint32_t SCENE_COLOR_BINDING_INDEX = SHADOW_BINDING_INDEX + 1;
 constexpr uint32_t AO_BINDING_INDEX = SCENE_COLOR_BINDING_INDEX + 1;
 constexpr uint32_t REFLECTION_BINDING_INDEX = AO_BINDING_INDEX + 1;
-constexpr uint32_t GRAPHICS_BINDING_COUNT = REFLECTION_BINDING_INDEX + 1;
+constexpr uint32_t LIGHT_SHADOW_BINDING_INDEX = REFLECTION_BINDING_INDEX + 1;
+constexpr uint32_t AMBIENT_A_BINDING_INDEX = LIGHT_SHADOW_BINDING_INDEX + 1;
+constexpr uint32_t AMBIENT_B_BINDING_INDEX = AMBIENT_A_BINDING_INDEX + 1;
+constexpr uint32_t GRAPHICS_BINDING_COUNT = AMBIENT_B_BINDING_INDEX + 1;
 constexpr uint32_t GROUND_BOX_MAX = 8;
 constexpr uint32_t SHADOW_MAP_SIZE = 4096;
 constexpr VkFormat SHADOW_FORMAT = VK_FORMAT_D32_SFLOAT;
@@ -371,6 +440,42 @@ private:
     glm::vec4 M_GROUNDEXTENT{ 0.0f };
     std::array<glm::vec4, GROUND_BOX_MAX> M_GROUNDBOXES{};
     float M_SHADOWNORMALBIAS = 0.0f;
+    AllocatedImage M_LIGHTSHADOWMAP{};
+    std::array<VkImageView, LIGHT_SHADOW_LAYERS> M_LIGHTSHADOWLAYERVIEWS{};
+    std::array<LightShadowState, LIGHT_SHADOW_MAX> m_lightShadows{};
+    bool m_lightShadowsStale = false;
+    double m_lightShadowNextBake = 0.0;
+
+    // AMBIENT VOLUME
+    std::array<AmbientVolume, 2> m_ambientVolumes{};
+    uint32_t m_ambientLive = 0;
+    uint32_t m_ambientBack = 1;
+    bool m_ambientAllocated = false;
+    bool m_ambientValid = false;
+    bool m_ambientDirty = false;
+    double m_ambientDirtyTime = 0.0;
+    bool m_ambientBaking = false;
+    uint32_t m_ambientNextDir = 0;
+    glm::vec3 m_ambientMin{ 0.0f };
+    glm::uvec3 m_ambientDims{ 1 };
+    float m_ambientCell = 1.0f;
+    glm::vec3 m_ambientBakeMin{ 0.0f };
+    glm::uvec3 m_ambientBakeDims{ 1 };
+    float m_ambientBakeCell = 1.0f;
+    std::array<float, 6> m_ambientInvWeight{};
+    AmbientBakeParams m_ambientParams{};
+    AmbientStep m_ambientStep{};
+    AllocatedBuffer M_AMBIENTSCRATCH{};
+    AllocatedBuffer M_AMBIENTPACKEDA{};
+    AllocatedBuffer M_AMBIENTPACKEDB{};
+    std::array<AllocatedBuffer, MAX_FRAMES_IN_FLIGHT> M_AMBIENTBAKEUBO{};
+    AllocatedImage M_AMBIENTDEPTH{};
+    std::array<VkImageView, AMBIENT_DIRS_PER_STEP> M_AMBIENTDEPTHVIEWS{};
+    VkSampler M_AMBIENTSAMPLER = VK_NULL_HANDLE;
+    VkDescriptorSetLayout M_AMBIENTSETLAYOUT = VK_NULL_HANDLE;
+    VkPipelineLayout M_AMBIENTPIPELINELAYOUT = VK_NULL_HANDLE;
+    VkPipeline M_AMBIENTACCUMPIPELINE = VK_NULL_HANDLE;
+    VkPipeline M_AMBIENTFINALIZEPIPELINE = VK_NULL_HANDLE;
 
     // IBL
     AllocatedImage M_IBLENV{};
@@ -542,6 +647,23 @@ private:
     void frameScene();
     void createShadowMap();
     void bakeShadowMap();
+    void createLightShadowMap();
+    void destroyLightShadowMap();
+    void updateLightShadows();
+    void renderLightShadowLayers(const std::vector<LightShadowJob>& jobs);
+    int lightShadowSlot(const Model* model) const;
+    void drawShadowCasters(VkCommandBuffer commandBuffer, const glm::mat4& viewProj,
+                           bool limitToSphere, const glm::vec3& center, float radius);
+    void createAmbientVolume();
+    void destroyAmbientVolume();
+    void updateAmbient();
+    bool beginAmbientBake();
+    void prepareAmbientStep(uint32_t slot);
+    void bakeAmbientBlocking();
+    void allocateAmbientVolumes(const glm::vec3& needMin, const glm::vec3& needMax);
+    void releaseAmbientVolumes();
+    void recordAmbientStep(VkCommandBuffer commandBuffer, uint32_t slot);
+    AllocatedImage createVolumeImage(const glm::uvec3& dims);
     void beginUiFrame();
     void buildUi();
     void drawWalkDebug();

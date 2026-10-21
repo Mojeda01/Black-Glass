@@ -36,7 +36,8 @@ const char* const DEBUG_VIEW_NAMES[] = {
     "6  Specular IBL",
     "7  Diffuse + direct",
     "8  Facing",
-    "9  Vertex normal"
+    "9  Vertex normal",
+    "10  Ambient visibility"
 };
 
 constexpr const char* SETTINGS_FILE = "black_glass_settings.cfg";
@@ -81,6 +82,8 @@ bool saveSettings(const RenderSettings& s, const std::string& path)
     out << "reflections=" << (s.reflections ? 1 : 0) << "\n";
     out << "reflectionStrength=" << s.reflectionStrength << "\n";
     out << "floorRoughness=" << s.floorRoughness << "\n";
+    out << "ambientOcclusion=" << (s.ambientOcclusion ? 1 : 0) << "\n";
+    out << "ambientFloor=" << s.ambientFloor << "\n";
     return static_cast<bool>(out);
 }
 
@@ -126,6 +129,8 @@ bool loadSettings(RenderSettings& s, const std::string& path)
         else if (key == "reflections") s.reflections = value != 0.0f;
         else if (key == "reflectionStrength") s.reflectionStrength = value;
         else if (key == "floorRoughness") s.floorRoughness = value;
+        else if (key == "ambientOcclusion") s.ambientOcclusion = value != 0.0f;
+        else if (key == "ambientFloor") s.ambientFloor = std::clamp(value, 0.0f, 1.0f);
     }
     return true;
 }
@@ -823,6 +828,10 @@ void BlackGlass::drawSettingsWindow()
                     ImGui::SliderFloat("Reflection strength", &m_settings.reflectionStrength, 0.0f, 6.0f, "%.2f");
                     ImGui::SliderFloat("Floor roughness", &m_settings.floorRoughness, 0.05f, 1.0f, "%.2f");
                     tip("Lower values give sharper reflections");
+                    ImGui::Checkbox("Ambient occlusion volume", &m_settings.ambientOcclusion);
+                    tip("Baked sky visibility that darkens environment light in enclosed spaces");
+                    ImGui::SliderFloat("Ambient floor", &m_settings.ambientFloor, 0.0f, 0.5f, "%.3f");
+                    tip("Minimum environment light left in fully enclosed spaces, 0 is pitch black");
                     if (ImGui::SmallButton("Reset##effects"))
                     {
                         m_settings.ssao = m_defaultSettings.ssao;
@@ -831,6 +840,8 @@ void BlackGlass::drawSettingsWindow()
                         m_settings.reflections = m_defaultSettings.reflections;
                         m_settings.reflectionStrength = m_defaultSettings.reflectionStrength;
                         m_settings.floorRoughness = m_defaultSettings.floorRoughness;
+                        m_settings.ambientOcclusion = m_defaultSettings.ambientOcclusion;
+                        m_settings.ambientFloor = m_defaultSettings.ambientFloor;
                     }
                 }
 

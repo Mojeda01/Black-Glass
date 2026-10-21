@@ -32,5 +32,8 @@ struct RenderSettings
     float reflectionStrength = 1.0f;
     float floorRoughness = 0.25f;
 
+    bool ambientOcclusion = true;
+    float ambientFloor = 0.02f;
+
     bool operator==(const RenderSettings&) const = default;
 };

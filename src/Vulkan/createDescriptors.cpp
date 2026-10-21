@@ -50,7 +50,8 @@ void BlackGlass::createDescriptorSetLayout()
     bindings[SCENE_COLOR_BINDING_INDEX].descriptorCount = 1;
     bindings[SCENE_COLOR_BINDING_INDEX].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    for (uint32_t index : { AO_BINDING_INDEX, REFLECTION_BINDING_INDEX })
+    for (uint32_t index : { AO_BINDING_INDEX, REFLECTION_BINDING_INDEX, LIGHT_SHADOW_BINDING_INDEX,
+                            AMBIENT_A_BINDING_INDEX, AMBIENT_B_BINDING_INDEX })
     {
         bindings[index].binding = index;
         bindings[index].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -235,10 +236,34 @@ void BlackGlass::updateUniformBuffer(uint32_t currentImage)
     std::sort(activeLights.begin(), activeLights.end(),
               [](const auto& a, const auto& b) { return a.first < b.first; });
 
+    for (uint32_t slotIndex = 0; slotIndex < LIGHT_SHADOW_MAX; slotIndex++)
+    {
+        if (m_lightShadows[slotIndex].baked)
+        {
+            for (uint32_t face = 0; face < LIGHT_SHADOW_FACES; face++)
+            {
+                ubo.lightShadowViewProj[slotIndex * LIGHT_SHADOW_FACES + face] = m_lightShadows[slotIndex].viewProj[face];
+            }
+        }
+    }
+
     uint32_t lightCount = static_cast<uint32_t>(std::min<size_t>(activeLights.size(), MAX_POINT_LIGHTS));
     for (uint32_t i = 0; i < lightCount; i++)
     {
         const Model* lightModel = activeLights[i].second;
+
+        int shadowSlot = lightShadowSlot(lightModel);
+        if (shadowSlot >= 0)
+        {
+            ubo.lightShadowInfo[i] = glm::vec4(static_cast<float>(shadowSlot),
+                                               m_lightShadows[static_cast<size_t>(shadowSlot)].normalOffset,
+                                               1.0f / static_cast<float>(LIGHT_SHADOW_SIZE), 0.0f);
+        }
+        else
+        {
+            ubo.lightShadowInfo[i] = glm::vec4(-1.0f, 0.0f, 0.0f, 0.0f);
+        }
+
         glm::vec3 center = (lightModel->worldMin + lightModel->worldMax) * 0.5f;
         ubo.lightPositions[i] = glm::vec4(center, lightModel->light->radius);
         ubo.lightColors[i] = glm::vec4(lightModel->light->color * lightModel->light->intensity, 0.0f);
@@ -260,6 +285,14 @@ void BlackGlass::updateUniformBuffer(uint32_t currentImage)
         }
     }
     ubo.lightInfo = glm::vec4(static_cast<float>(lightCount), 0.0f, 0.0f, 0.0f);
+
+    const bool ambientActive = m_settings.ambientOcclusion && m_ambientValid;
+    const glm::vec3 ambientExtent = glm::vec3(m_ambientDims) * m_ambientCell;
+    ubo.volumeMin = glm::vec4(m_ambientMin, m_ambientCell);
+    ubo.volumeInvExtent = glm::vec4(1.0f / std::max(ambientExtent.x, 1e-4f),
+                                    1.0f / std::max(ambientExtent.y, 1e-4f),
+                                    1.0f / std::max(ambientExtent.z, 1e-4f), 0.0f);
+    ubo.volumeParams = glm::vec4(ambientActive ? 1.0f : 0.0f, m_settings.ambientFloor, 0.0f, 0.0f);
 
     if (m_walkMode && m_viewModelReady && !m_viewJoints.empty())
     {

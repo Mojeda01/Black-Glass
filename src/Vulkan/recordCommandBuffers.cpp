@@ -128,6 +128,8 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
     }
     writeTimestamp(commandBuffer, 0);
 
+    recordAmbientStep(commandBuffer, M_CURRENTFRAME);
+
     const bool msaa = M_MSAASAMPLES != VK_SAMPLE_COUNT_1_BIT;
     const bool bloom = m_settings.bloom && !M_BLOOMIMAGES.empty() && m_debugView == 0;
 
@@ -209,6 +211,21 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
     shadowInfo.sampler = M_SHADOWSAMPLER;
     shadowInfo.imageView = M_SHADOWMAP.view;
     shadowInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkDescriptorImageInfo lightShadowInfo{};
+    lightShadowInfo.sampler = M_SHADOWSAMPLER;
+    lightShadowInfo.imageView = M_LIGHTSHADOWMAP.view;
+    lightShadowInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkDescriptorImageInfo ambientInfoA{};
+    ambientInfoA.sampler = M_AMBIENTSAMPLER;
+    ambientInfoA.imageView = m_ambientVolumes[m_ambientLive].imageA.view;
+    ambientInfoA.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkDescriptorImageInfo ambientInfoB{};
+    ambientInfoB.sampler = M_AMBIENTSAMPLER;
+    ambientInfoB.imageView = m_ambientVolumes[m_ambientLive].imageB.view;
+    ambientInfoB.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     VkDescriptorImageInfo aoInfo{};
     aoInfo.sampler = M_POSTSAMPLER;
@@ -315,6 +332,24 @@ void BlackGlass::recordCommandBuffers(VkCommandBuffer commandBuffer, uint32_t im
         descriptorWrites[REFLECTION_BINDING_INDEX].descriptorCount = 1;
         descriptorWrites[REFLECTION_BINDING_INDEX].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorWrites[REFLECTION_BINDING_INDEX].pImageInfo = &reflInfo;
+
+        descriptorWrites[LIGHT_SHADOW_BINDING_INDEX].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[LIGHT_SHADOW_BINDING_INDEX].dstBinding = LIGHT_SHADOW_BINDING_INDEX;
+        descriptorWrites[LIGHT_SHADOW_BINDING_INDEX].descriptorCount = 1;
+        descriptorWrites[LIGHT_SHADOW_BINDING_INDEX].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[LIGHT_SHADOW_BINDING_INDEX].pImageInfo = &lightShadowInfo;
+
+        descriptorWrites[AMBIENT_A_BINDING_INDEX].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[AMBIENT_A_BINDING_INDEX].dstBinding = AMBIENT_A_BINDING_INDEX;
+        descriptorWrites[AMBIENT_A_BINDING_INDEX].descriptorCount = 1;
+        descriptorWrites[AMBIENT_A_BINDING_INDEX].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[AMBIENT_A_BINDING_INDEX].pImageInfo = &ambientInfoA;
+
+        descriptorWrites[AMBIENT_B_BINDING_INDEX].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[AMBIENT_B_BINDING_INDEX].dstBinding = AMBIENT_B_BINDING_INDEX;
+        descriptorWrites[AMBIENT_B_BINDING_INDEX].descriptorCount = 1;
+        descriptorWrites[AMBIENT_B_BINDING_INDEX].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[AMBIENT_B_BINDING_INDEX].pImageInfo = &ambientInfoB;
 
         if (!constantsPushed)
         {

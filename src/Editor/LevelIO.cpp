@@ -174,6 +174,8 @@ bool saveLevelFile(const std::string& path, const LevelData& level, std::string&
         settings["reflections"] = s.reflections;
         settings["reflectionStrength"] = s.reflectionStrength;
         settings["floorRoughness"] = s.floorRoughness;
+        settings["ambientOcclusion"] = s.ambientOcclusion;
+        settings["ambientFloor"] = s.ambientFloor;
         root["settings"] = settings;
     }
 
@@ -334,6 +336,8 @@ bool loadLevelFile(const std::string& path, LevelData& level, std::string& error
             s.reflections = settings.value("reflections", s.reflections);
             s.reflectionStrength = settings.value("reflectionStrength", s.reflectionStrength);
             s.floorRoughness = settings.value("floorRoughness", s.floorRoughness);
+            s.ambientOcclusion = settings.value("ambientOcclusion", s.ambientOcclusion);
+            s.ambientFloor = std::clamp(settings.value("ambientFloor", s.ambientFloor), 0.0f, 1.0f);
             loaded.hasSettings = true;
         }
 

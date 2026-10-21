@@ -98,6 +98,8 @@ void BlackGlass::initVulkan()
     std::cout << "→ createShadowMap()\n";
     refreshScene();
     createShadowMap();
+    createLightShadowMap();
+    createAmbientVolume();
     m_shadowDirty = false;
 
     std::cout << "→ loadViewModel()\n";
