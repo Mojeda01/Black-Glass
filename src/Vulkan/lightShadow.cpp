@@ -183,6 +183,8 @@ void BlackGlass::updateLightShadows()
         }
 
         float distance = glm::distance(centerOf(*model), m_camera.position);
+        float reach = std::max(model->light->radius, 0.1f);
+        distance = std::max(distance - reach, 0.0f) + distance * 0.001f;
         bool held = false;
         for (const LightShadowState& slot : m_lightShadows)
         {

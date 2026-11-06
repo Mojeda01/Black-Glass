@@ -19,7 +19,7 @@ struct FrameData {
     float4 lightColors[16];
     float4 lightDirections[16];
     float4 lightShadowInfo[16];
-    float4x4 lightShadowViewProj[24];
+    float4x4 lightShadowViewProj[48];
     float4 volumeMin;
     float4 volumeInvExtent;
     float4 volumeParams;
@@ -223,19 +223,25 @@ float ambientVisibility(float3 worldPos, float3 geometricNormal, float3 dir)
 
     float3 p = worldPos + geometricNormal * (frame.volumeMin.w * 1.1);
     float3 uvw = (p - frame.volumeMin.xyz) * frame.volumeInvExtent.xyz;
-    if (uvw.x < 0.0 || uvw.x > 1.0 || uvw.y < 0.0 || uvw.y > 1.0 || uvw.z < 0.0 || uvw.z > 1.0)
+
+    float3 edgeUvw = min(uvw, 1.0 - uvw);
+    float3 edgeWorld = edgeUvw / max(frame.volumeInvExtent.xyz, float3(1e-6, 1e-6, 1e-6));
+    float edgeDistance = min(edgeWorld.x, min(edgeWorld.y, edgeWorld.z));
+    float edgeFade = smoothstep(0.0, max(frame.volumeMin.w, 1e-3), edgeDistance);
+    if (edgeFade <= 0.0)
         return 1.0;
+
+    float3 w = dir * dir;
 
     float4 a = ambientVolumeA.SampleLevel(uvw, 0.0);
     float4 b = ambientVolumeB.SampleLevel(uvw, 0.0);
-
-    float3 w = dir * dir;
     float vx = dir.x >= 0.0 ? a.x : a.y;
     float vy = dir.y >= 0.0 ? a.z : a.w;
     float vz = dir.z >= 0.0 ? b.x : b.y;
     float visibility = vx * vx * w.x + vy * vy * w.y + vz * vz * w.z;
 
-    return lerp(frame.volumeParams.y, 1.0, saturate(visibility));
+    float result = lerp(frame.volumeParams.y, 1.0, saturate(visibility));
+    return lerp(1.0, result, edgeFade);
 }
 
 float lightShadow(int li, float3 worldPos, float3 geometricNormal)
@@ -328,7 +334,7 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
 
     bool reflectionPass = frame.passParams.x > 0.5;
     bool opaquePath = material.transmissionParams.x <= 0.0 && material.flags1.y != 2;
-    if (frame.effectParams.x > 0.5 && opaquePath && !reflectionPass && push.highlight.w > -0.5)
+    if (frame.effectParams.x > 0.5 && opaquePath && material.flags1.y != 1 && !reflectionPass && push.highlight.w > -0.5)
         ao *= aoTex.SampleLevel(input.pos.xy / frame.debugParams.zw, 0.0).r;
 
     int debugView = int(frame.debugParams.x + 0.5);

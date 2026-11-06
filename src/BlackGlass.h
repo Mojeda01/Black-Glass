@@ -110,7 +110,7 @@ struct CollisionPiece
 
 constexpr uint32_t MAX_POINT_LIGHTS = 16;
 constexpr uint32_t MAX_JOINTS = 128;
-constexpr uint32_t LIGHT_SHADOW_MAX = 4;
+constexpr uint32_t LIGHT_SHADOW_MAX = 8;
 constexpr uint32_t LIGHT_SHADOW_FACES = 6;
 constexpr uint32_t LIGHT_SHADOW_LAYERS = LIGHT_SHADOW_MAX * LIGHT_SHADOW_FACES;
 constexpr uint32_t LIGHT_SHADOW_SIZE = 512;

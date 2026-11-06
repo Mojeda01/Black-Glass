@@ -194,7 +194,10 @@ float4 compositeFragment(FullscreenOutput input) : SV_Target
 
     float2 p = input.pos.xy;
     float noise = frac(52.9829189 * frac(dot(p, float2(0.06711056, 0.00583715))));
-    color += (noise - 0.5) / 255.0;
+    float3 encodeSlope = lerp(float3(12.92, 12.92, 12.92),
+                              0.439583 * pow(max(color, float3(0.0031308, 0.0031308, 0.0031308)), float3(-0.583333, -0.583333, -0.583333)),
+                              step(float3(0.0031308, 0.0031308, 0.0031308), color));
+    color += (noise - 0.5) / 255.0 / encodeSlope;
 
     return float4(color, 1.0);
 }
