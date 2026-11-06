@@ -220,7 +220,7 @@ void BlackGlass::createAmbientVolume()
         pipelineInfo.layout = M_AMBIENTPIPELINELAYOUT;
 
         VkPipeline pipeline = VK_NULL_HANDLE;
-        if (vkCreateComputePipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS)
+        if (vkCreateComputePipelines(M_DEVICE, M_PIPELINECACHE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS)
         {
             vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
             throw std::runtime_error(std::string("Failed to create compute pipeline: ") + entry);

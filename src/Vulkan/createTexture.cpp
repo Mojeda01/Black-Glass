@@ -115,9 +115,10 @@ namespace
     }
 }
 
-AllocatedImage BlackGlass::createTextureFromPixels(const unsigned char* pixels,
+AllocatedImage BlackGlass::recordTextureUpload(VkCommandBuffer commandBuffer,
+                                        const unsigned char* pixels,
                                         int texWidth, int texHeight,
-                                        VkFormat format)
+                                        VkFormat format, AllocatedBuffer& staging)
 {
     VkDeviceSize imageSize = static_cast<VkDeviceSize>(texWidth) * texHeight * 4;
 
@@ -137,7 +138,7 @@ AllocatedImage BlackGlass::createTextureFromPixels(const unsigned char* pixels,
         }
     }
 
-    AllocatedBuffer staging = createBuffer(
+    staging = createBuffer(
         imageSize,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
@@ -155,8 +156,6 @@ AllocatedImage BlackGlass::createTextureFromPixels(const unsigned char* pixels,
         VK_IMAGE_ASPECT_COLOR_BIT,
         mipLevels
     );
-
-    VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
     recordImageBarrier(commandBuffer, texture.image, 0, mipLevels,
         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -223,11 +222,30 @@ AllocatedImage BlackGlass::createTextureFromPixels(const unsigned char* pixels,
         VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
         VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
-    endSingleTimeCommands(commandBuffer);
-
-    destroyBuffer(staging);
     std::cout << "  [createTextureFromPixels] SUCCESS - " << texWidth << "x" << texHeight
         << " texture uploaded with " << mipLevels << " mip levels.\n";
+    return texture;
+}
+
+AllocatedImage BlackGlass::createTextureFromPixels(const unsigned char* pixels,
+                                        int texWidth, int texHeight,
+                                        VkFormat format)
+{
+    VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+    AllocatedBuffer staging{};
+    AllocatedImage texture{};
+    try
+    {
+        texture = recordTextureUpload(commandBuffer, pixels, texWidth, texHeight, format, staging);
+    }
+    catch (...)
+    {
+        endSingleTimeCommands(commandBuffer);
+        destroyBuffer(staging);
+        throw;
+    }
+    endSingleTimeCommands(commandBuffer);
+    destroyBuffer(staging);
     return texture;
 }
 
@@ -248,6 +266,29 @@ void BlackGlass::createModelTextures(ModelAsset& model, const MeshData& mesh)
     model.textureImages.reserve(mesh.textures.size());
     model.textures.reserve(mesh.textures.size());
 
+    constexpr VkDeviceSize BATCH_STAGING_LIMIT = 256ull * 1024ull * 1024ull;
+
+    VkCommandBuffer batch = VK_NULL_HANDLE;
+    std::vector<AllocatedBuffer> stagings;
+    VkDeviceSize pending = 0;
+
+    auto flushBatch = [&]()
+    {
+        if (batch != VK_NULL_HANDLE)
+        {
+            endSingleTimeCommands(batch);
+            batch = VK_NULL_HANDLE;
+        }
+        for (AllocatedBuffer& staging : stagings)
+        {
+            destroyBuffer(staging);
+        }
+        stagings.clear();
+        pending = 0;
+    };
+
+    try
+    {
     for (const TextureData& texture : mesh.textures)
     {
         auto key = std::make_pair(texture.image, texture.srgb);
@@ -255,9 +296,21 @@ void BlackGlass::createModelTextures(ModelAsset& model, const MeshData& mesh)
         if (found == imageLookup.end())
         {
             const ImageData& image = mesh.images[texture.image];
-            model.textureImages.push_back(createTextureFromPixels(
-                image.pixels.data(), image.width, image.height,
-                texture.srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM));
+            const VkDeviceSize imageBytes = static_cast<VkDeviceSize>(image.width) * image.height * 4;
+            if (batch != VK_NULL_HANDLE && pending + imageBytes > BATCH_STAGING_LIMIT)
+            {
+                flushBatch();
+            }
+            if (batch == VK_NULL_HANDLE)
+            {
+                batch = beginSingleTimeCommands();
+            }
+            stagings.emplace_back();
+            model.textureImages.push_back(recordTextureUpload(
+                batch, image.pixels.data(), image.width, image.height,
+                texture.srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM,
+                stagings.back()));
+            pending += imageBytes;
             found = imageLookup.emplace(key, model.textureImages.size() - 1).first;
         }
 
@@ -266,6 +319,13 @@ void BlackGlass::createModelTextures(ModelAsset& model, const MeshData& mesh)
         gpu.sampler = texture.sampler >= 0 ? model.samplers[texture.sampler] : M_TEXTURESAMPLER;
         model.textures.push_back(gpu);
     }
+    }
+    catch (...)
+    {
+        flushBatch();
+        throw;
+    }
+    flushBatch();
 
     model.materials = mesh.materials;
     createModelMaterialBuffer(model);

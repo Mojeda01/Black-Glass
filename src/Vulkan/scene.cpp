@@ -262,7 +262,10 @@ int BlackGlass::registerAsset(MeshData& mesh, const std::string& name, const std
     asset->name = name;
     computeMeshBounds(mesh, asset->localMin, asset->localMax);
 
-    vkDeviceWaitIdle(M_DEVICE);
+    if (!m_loading)
+    {
+        vkDeviceWaitIdle(M_DEVICE);
+    }
     try
     {
         uploadModelGeometry(*asset, mesh);

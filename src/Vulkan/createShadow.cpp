@@ -178,7 +178,7 @@ void BlackGlass::createShadowMap()
     pipelineInfo.pDynamicState = &dynamicState;
     pipelineInfo.layout = M_SHADOWPIPELINELAYOUT;
 
-    if (vkCreateGraphicsPipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &M_SHADOWPIPELINE) != VK_SUCCESS)
+    if (vkCreateGraphicsPipelines(M_DEVICE, M_PIPELINECACHE, 1, &pipelineInfo, nullptr, &M_SHADOWPIPELINE) != VK_SUCCESS)
     {
         vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
         throw std::runtime_error("Failed to create shadow pipeline!");

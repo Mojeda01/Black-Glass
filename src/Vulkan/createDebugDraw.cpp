@@ -112,14 +112,14 @@ void BlackGlass::createDebugDraw()
     pipelineInfo.pDynamicState = &dynamicState;
     pipelineInfo.layout = M_PIPELINELAYOUT;
 
-    if (vkCreateGraphicsPipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &M_DEBUGLINEPIPELINE) != VK_SUCCESS)
+    if (vkCreateGraphicsPipelines(M_DEVICE, M_PIPELINECACHE, 1, &pipelineInfo, nullptr, &M_DEBUGLINEPIPELINE) != VK_SUCCESS)
     {
         vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
         throw std::runtime_error("Failed to create debug line pipeline!");
     }
 
     depthStencil.depthTestEnable = VK_FALSE;
-    if (vkCreateGraphicsPipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &M_DEBUGOVERLAYPIPELINE) != VK_SUCCESS)
+    if (vkCreateGraphicsPipelines(M_DEVICE, M_PIPELINECACHE, 1, &pipelineInfo, nullptr, &M_DEBUGOVERLAYPIPELINE) != VK_SUCCESS)
     {
         vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
         throw std::runtime_error("Failed to create debug overlay pipeline!");

@@ -354,6 +354,8 @@ void BlackGlass::cleanup()
 
     if (M_DEVICE != VK_NULL_HANDLE)
     {
+        savePipelineCache();
+        destroyPipelineCache();
         vkDestroyDevice(M_DEVICE, nullptr);
         std::cout << "  [cleanup] Logical device destroyed.\n";
     }

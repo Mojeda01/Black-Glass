@@ -8,6 +8,7 @@
 void BlackGlass::initVulkan()
 {
     std::cout << "[BlackGlass::initVulkan()]:: Started \n";
+    m_loading = true;
     FrameLog::open();
     StateLog::open();
 
@@ -28,6 +29,7 @@ void BlackGlass::initVulkan()
 
     std::cout << "→ createAllocator()\n";
     createAllocator();
+    createPipelineCache();
 
     std::cout << "→ createSwapchain()\n";
     createSwapchain();
@@ -37,6 +39,17 @@ void BlackGlass::initVulkan()
     
     std::cout << "→ createCommandPool()\n";
     createCommandPool();
+
+    std::cout << "→ createCommandBuffers()\n";
+    createCommandBuffers();
+
+    std::cout << "→ createSyncObjects()\n";
+    createSyncObjects();
+
+    std::cout << "→ initImGui()\n";
+    initImGui();
+    startSplash();
+    pumpSplash();
 
     std::cout << "→ pickMsaaSamples()\n";
     pickMsaaSamples();
@@ -49,13 +62,16 @@ void BlackGlass::initVulkan()
 
     std::cout << "→ createEffectResources()\n";
     createEffectResources();
+    pumpSplash();
 
     std::cout << "→ createTextureSampler()\n";
     createTextureSampler();
     createFallbackTexture();
+    pumpSplash();
 
     std::cout << "→ createGroundModel()\n";
     createGroundModel();
+    pumpSplash();
 
     std::cout << "→ importAsset()\n";
     int defaultAsset = importAsset(std::string(BLACK_GLASS_ASSET_DIR) + "/CarConcept.glb");
@@ -65,21 +81,19 @@ void BlackGlass::initVulkan()
     }
     addInstance(defaultAsset, true);
     frameScene();
+    pumpSplash();
 
     std::cout << "→ createDescriptorSetLayout()\n";
     createDescriptorSetLayout();
+    pumpSplash();
 
     std::cout << "→ createIBL()\n";
     createIBL();
+    pumpSplash();
 
     std::cout << "→ createUniformBuffers()\n";
     createUniformBuffers();
 
-    std::cout << "→ createCommandBuffers()\n";
-    createCommandBuffers();
-
-    std::cout << "→ createSyncObjects()\n";
-    createSyncObjects();
     createTimestampPool();
 
     std::cout << "→ createPipelineLayout()\n";
@@ -87,21 +101,33 @@ void BlackGlass::initVulkan()
 
     std::cout << "→ createGraphicsPipeline()\n";
     createGraphicsPipeline();
+    pumpSplash();
     createDebugDraw();
 
     std::cout << "→ createPostResources()\n";
     createPostResources();
+    pumpSplash();
 
     std::cout << "→ createEffectPipelines()\n";
     createEffectPipelines();
+    pumpSplash();
 
     std::cout << "→ createShadowMap()\n";
     refreshScene();
     createShadowMap();
+    pumpSplash();
     createLightShadowMap();
+    pumpSplash();
     createAmbientVolume();
+    pumpSplash();
     m_shadowDirty = false;
 
     std::cout << "→ loadViewModel()\n";
     loadViewModel();
+    pumpSplash();
+
+    updateAmbient();
+    pumpSplash();
+
+    savePipelineCache();
 }

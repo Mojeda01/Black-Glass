@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../imgui/imgui.h"
+#include "../imgui/imgui_impl_glfw.h"
 #include "../imgui/imgui_impl_vulkan.h"
 #include "../stb_image.h"
 
@@ -17,6 +18,147 @@ namespace
 {
     constexpr int ATLAS_COLUMNS = 8;
     constexpr float DISPLAY_SCALE = 1.0f;
+    constexpr double SPLASH_PUMP_INTERVAL = 0.025;
+    constexpr double SPLASH_MAX_STEP = 0.05;
+}
+
+void BlackGlass::pumpSplash()
+{
+    glfwPollEvents();
+
+    if (!m_splashActive || !m_imguiBackend || M_COMMANDBUFFERS.empty() || M_INFLIGHTFENCES.empty())
+    {
+        return;
+    }
+    if (glfwGetWindowAttrib(m_window, GLFW_ICONIFIED))
+    {
+        return;
+    }
+
+    const double now = glfwGetTime();
+    if (m_splashPumpTime > 0.0 && now - m_splashPumpTime < SPLASH_PUMP_INTERVAL)
+    {
+        return;
+    }
+    m_splashPumpTime = now;
+
+    vkWaitForFences(M_DEVICE, 1, &M_INFLIGHTFENCES[M_CURRENTFRAME], VK_TRUE, UINT64_MAX);
+
+    uint32_t imageIndex = 0;
+    VkResult result = vkAcquireNextImageKHR(
+        M_DEVICE, M_SWAPCHAIN, UINT64_MAX,
+        M_IMAGEAVAILABLESEMAPHORES[M_CURRENTFRAME], VK_NULL_HANDLE, &imageIndex);
+    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+    {
+        return;
+    }
+
+    vkResetFences(M_DEVICE, 1, &M_INFLIGHTFENCES[M_CURRENTFRAME]);
+
+    VkCommandBuffer commandBuffer = M_COMMANDBUFFERS[M_CURRENTFRAME];
+    vkResetCommandBuffer(commandBuffer, 0);
+
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    drawSplash();
+    ImGui::Render();
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+    auto transition = [&](VkImageLayout oldLayout, VkImageLayout newLayout,
+                          VkAccessFlags2 srcAccess, VkAccessFlags2 dstAccess,
+                          VkPipelineStageFlags2 srcStage, VkPipelineStageFlags2 dstStage)
+    {
+        VkImageMemoryBarrier2 barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        barrier.srcStageMask = srcStage;
+        barrier.srcAccessMask = srcAccess;
+        barrier.dstStageMask = dstStage;
+        barrier.dstAccessMask = dstAccess;
+        barrier.oldLayout = oldLayout;
+        barrier.newLayout = newLayout;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = M_SWAPCHAINIMAGES[imageIndex];
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.layerCount = 1;
+
+        VkDependencyInfo dependencyInfo{};
+        dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dependencyInfo.imageMemoryBarrierCount = 1;
+        dependencyInfo.pImageMemoryBarriers = &barrier;
+        vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
+    };
+
+    transition(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+               VK_ACCESS_2_NONE, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+               VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+    VkRenderingAttachmentInfo attachment{};
+    attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    attachment.imageView = M_SWAPCHAINIMAGEVIEWS[imageIndex];
+    attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachment.clearValue.color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+
+    VkRenderingInfo renderingInfo{};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    renderingInfo.renderArea.offset = { 0, 0 };
+    renderingInfo.renderArea.extent = M_SWAPCHAINEXTENT;
+    renderingInfo.layerCount = 1;
+    renderingInfo.colorAttachmentCount = 1;
+    renderingInfo.pColorAttachments = &attachment;
+
+    vkCmdBeginRendering(commandBuffer, &renderingInfo);
+    if (m_splashActive)
+    {
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+    }
+    vkCmdEndRendering(commandBuffer);
+
+    transition(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+               VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_2_NONE,
+               VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
+
+    vkEndCommandBuffer(commandBuffer);
+
+    VkSemaphore waitSemaphores[] = { M_IMAGEAVAILABLESEMAPHORES[M_CURRENTFRAME] };
+    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+    VkSemaphore signalSemaphores[] = { M_RENDERFINISHEDSEMAPHORES[imageIndex] };
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+    if (vkQueueSubmit(M_GRAPHICSQUEUE, 1, &submitInfo, M_INFLIGHTFENCES[M_CURRENTFRAME]) != VK_SUCCESS)
+    {
+        return;
+    }
+
+    VkSwapchainKHR swapchains[] = { M_SWAPCHAIN };
+
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = signalSemaphores;
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapchains;
+    presentInfo.pImageIndices = &imageIndex;
+    vkQueuePresentKHR(M_PRESENTQUEUE, &presentInfo);
+
+    M_CURRENTFRAME = (M_CURRENTFRAME + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 void BlackGlass::startSplash()
@@ -119,6 +261,7 @@ void BlackGlass::startSplash()
     m_splashAtlasSize = glm::ivec2(atlasWidth, atlasHeight);
     m_splashColumns = columns;
     m_splashStart = -1.0;
+    m_splashElapsed = 0.0;
     m_splashSkip = false;
     m_splashActive = true;
 }
@@ -146,13 +289,21 @@ void BlackGlass::releaseSplash()
 
 void BlackGlass::drawSplash()
 {
+    const double now = glfwGetTime();
     if (m_splashStart < 0.0)
     {
-        m_splashStart = glfwGetTime();
+        m_splashStart = now;
+        m_splashElapsed = 0.0;
     }
+    m_splashElapsed += std::min(now - m_splashStart, SPLASH_MAX_STEP);
+    m_splashStart = now;
 
-    double elapsed = glfwGetTime() - m_splashStart;
-    int milliseconds = static_cast<int>(elapsed * 1000.0);
+    int milliseconds = static_cast<int>(m_splashElapsed * 1000.0);
+    if (m_loading && !m_splashSkip && !m_splashEnds.empty() && milliseconds >= m_splashEnds.back())
+    {
+        m_splashElapsed = 0.0;
+        milliseconds = 0;
+    }
     if (m_splashSkip || m_splashEnds.empty() || milliseconds >= m_splashEnds.back())
     {
         releaseSplash();

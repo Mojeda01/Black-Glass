@@ -299,6 +299,9 @@ public:
     void toggleWalkMode(bool fromCamera = false);
     void startSplash();
     void skipSplash();
+    void pumpSplash();
+    void finishImGui();
+    bool loading() const { return m_loading; }
     bool splashActive() const { return m_splashActive; }
     void exitWalkMode();
     bool walkMode() const { return m_walkMode; }
@@ -334,6 +337,9 @@ private:
     RenderSettings m_settings;
     bool m_shadowDirty = false;
     bool m_imguiReady = false;
+    bool m_imguiBackend = false;
+    bool m_loading = false;
+    double m_splashPumpTime = 0.0;
     bool m_showUi = true;
     bool m_showLibrary = false;
     bool m_showSettings = false;
@@ -379,6 +385,7 @@ private:
     VkQueue M_GRAPHICSQUEUE = VK_NULL_HANDLE;
     VkQueue M_PRESENTQUEUE = VK_NULL_HANDLE;
     VmaAllocator M_ALLOCATOR = VK_NULL_HANDLE;
+    VkPipelineCache M_PIPELINECACHE = VK_NULL_HANDLE;
     VkSurfaceKHR M_SURFACE = VK_NULL_HANDLE;
 
     // SWAPCHAIN
@@ -521,6 +528,7 @@ private:
     bool m_splashActive = false;
     bool m_splashSkip = false;
     double m_splashStart = -1.0;
+    double m_splashElapsed = 0.0;
     int m_splashColumns = 1;
     glm::ivec2 m_splashFrameSize{ 1, 1 };
     glm::ivec2 m_splashAtlasSize{ 1, 1 };
@@ -677,6 +685,9 @@ private:
     void createDescriptorSetLayout();
     void createUniformBuffers();
     void updateUniformBuffer(uint32_t currentImage);
+    AllocatedImage recordTextureUpload(VkCommandBuffer commandBuffer, const unsigned char* pixels,
+                                        int width, int height, VkFormat format,
+                                        AllocatedBuffer& staging);
     AllocatedImage createTextureFromPixels(const unsigned char* pixels, int width, int height,
                                             VkFormat format);
     void createFallbackTexture();
@@ -713,6 +724,9 @@ private:
     // MEMORY
     void createAllocator();
     void destroyAllocator();
+    void createPipelineCache();
+    void savePipelineCache();
+    void destroyPipelineCache();
     VkFormat findDepthFormat();
     AllocatedImage createImage( uint32_t width, uint32_t height, VkFormat format,
                                 VkImageTiling tiling, VkImageUsageFlags usage,

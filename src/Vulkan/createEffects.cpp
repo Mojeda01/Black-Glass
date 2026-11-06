@@ -216,7 +216,7 @@ void BlackGlass::createEffectPipelines()
             pipelineInfo.layout = M_FXPIPELINELAYOUT;
 
             VkPipeline pipeline = VK_NULL_HANDLE;
-            if (vkCreateGraphicsPipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS)
+            if (vkCreateGraphicsPipelines(M_DEVICE, M_PIPELINECACHE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS)
             {
                 throw std::runtime_error(std::string("Failed to create effects pipeline: ") + fragmentEntry);
             }
@@ -276,7 +276,7 @@ void BlackGlass::createEffectPipelines()
         pipelineInfo.pDynamicState = &dynamicState;
         pipelineInfo.layout = M_PIPELINELAYOUT;
 
-        if (vkCreateGraphicsPipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &M_PREPASSPIPELINE) != VK_SUCCESS)
+        if (vkCreateGraphicsPipelines(M_DEVICE, M_PIPELINECACHE, 1, &pipelineInfo, nullptr, &M_PREPASSPIPELINE) != VK_SUCCESS)
         {
             vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
             throw std::runtime_error("Failed to create depth prepass pipeline!");

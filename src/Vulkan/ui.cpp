@@ -247,6 +247,11 @@ void BlackGlass::initImGui()
         throw std::runtime_error("Failed to initialize the ImGui Vulkan backend!");
     }
 
+    m_imguiBackend = true;
+}
+
+void BlackGlass::finishImGui()
+{
     glm::vec3 dir = glm::normalize(M_LIGHTDIR);
     m_settings.sunElevation = glm::degrees(std::asin(dir.y));
     m_settings.sunAzimuth = glm::degrees(std::atan2(dir.z, dir.x));
@@ -257,6 +262,7 @@ void BlackGlass::initImGui()
     initEditor();
 
     m_imguiReady = true;
+    m_loading = false;
     std::cout << "  [initImGui] SUCCESS - Dear ImGui ready.\n";
 }
 
@@ -329,7 +335,7 @@ void BlackGlass::scanAssets()
 
 void BlackGlass::shutdownImGui()
 {
-    if (!m_imguiReady)
+    if (!m_imguiBackend)
     {
         return;
     }
@@ -340,6 +346,7 @@ void BlackGlass::shutdownImGui()
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
     m_imguiReady = false;
+    m_imguiBackend = false;
 }
 
 bool BlackGlass::uiWantsMouse() const

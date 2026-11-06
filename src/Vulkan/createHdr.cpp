@@ -262,7 +262,7 @@ void BlackGlass::createPostResources()
         pipelineInfo.layout = M_POSTPIPELINELAYOUT;
 
         VkPipeline pipeline = VK_NULL_HANDLE;
-        if (vkCreateGraphicsPipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS)
+        if (vkCreateGraphicsPipelines(M_DEVICE, M_PIPELINECACHE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS)
         {
             throw std::runtime_error(std::string("Failed to create post-process pipeline: ") + fragmentEntry);
         }

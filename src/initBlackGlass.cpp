@@ -62,7 +62,6 @@ void initBlackGlass() {
         std::cout << "GLFW window created successfully.\n";
 
         BlackGlass renderer(window.get());
-        renderer.initVulkan();
 
         glfwSetWindowUserPointer(window.get(), &renderer);
         glfwSetFramebufferSizeCallback(window.get(),
@@ -74,7 +73,7 @@ void initBlackGlass() {
         glfwSetWindowFocusCallback(window.get(),
                 [](GLFWwindow* w, int focused) {
                     auto* r = static_cast<BlackGlass*>(glfwGetWindowUserPointer(w));
-                    if (r && !focused) r->setMouseCaptured(false);
+                    if (r && !focused && !r->loading()) r->setMouseCaptured(false);
                 });
 
         glfwSetMouseButtonCallback(window.get(),
@@ -84,7 +83,7 @@ void initBlackGlass() {
                     {
                         return;
                     }
-                    if (r->splashActive())
+                    if (r->splashActive() || r->loading())
                     {
                         if (action == GLFW_PRESS)
                         {
@@ -113,19 +112,19 @@ void initBlackGlass() {
         glfwSetScrollCallback(window.get(),
                 [](GLFWwindow* w, double, double yoffset) {
                     auto* r = static_cast<BlackGlass*>(glfwGetWindowUserPointer(w));
-                    if (r) r->onScroll(yoffset);
+                    if (r && !r->loading()) r->onScroll(yoffset);
                 });
 
         glfwSetCursorPosCallback(window.get(),
                 [](GLFWwindow* w, double xpos, double ypos) {
                     auto* r = static_cast<BlackGlass*>(glfwGetWindowUserPointer(w));
-                    if (r) r->onMouseMove(xpos, ypos);
+                    if (r && !r->loading()) r->onMouseMove(xpos, ypos);
                 });
 
          glfwSetKeyCallback(window.get(),
                  [](GLFWwindow* w, int key, int, int action, int mods) {
                     auto* r = static_cast<BlackGlass*>(glfwGetWindowUserPointer(w));
-                    if (r && r->splashActive())
+                    if (r && (r->splashActive() || r->loading()))
                     {
                         if (action == GLFW_PRESS)
                         {
@@ -199,8 +198,8 @@ void initBlackGlass() {
                     }
                  });
 
-        renderer.initImGui();
-        renderer.startSplash();
+        renderer.initVulkan();
+        renderer.finishImGui();
 
         while (!window.shouldClose()) {
             window.pollEvents();

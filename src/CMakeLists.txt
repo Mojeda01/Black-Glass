@@ -41,6 +41,7 @@ add_library(black_glass_engine STATIC
     Vulkan/createImageViews.cpp
     Vulkan/recreateSwapchain.cpp
     Vulkan/memory.cpp
+    Vulkan/pipelineCache.cpp
     Vulkan/createCommandPool.cpp 
     Vulkan/createCommandBuffers.cpp
     Vulkan/createSyncObjects.cpp

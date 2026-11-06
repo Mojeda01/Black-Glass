@@ -238,7 +238,7 @@ void BlackGlass::createIBL()
         pipelineInfo.layout = computeLayout;
 
         VkPipeline pipeline = VK_NULL_HANDLE;
-        if (vkCreateComputePipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS)
+        if (vkCreateComputePipelines(M_DEVICE, M_PIPELINECACHE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS)
         {
             throw std::runtime_error(std::string("Failed to create compute pipeline: ") + entry);
         }

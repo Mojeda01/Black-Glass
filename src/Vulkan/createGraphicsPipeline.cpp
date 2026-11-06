@@ -148,7 +148,7 @@ void BlackGlass::createGraphicsPipeline()
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;
 
-    if (vkCreateGraphicsPipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &M_GRAPHICSPIPELINE) != VK_SUCCESS)
+    if (vkCreateGraphicsPipelines(M_DEVICE, M_PIPELINECACHE, 1, &pipelineInfo, nullptr, &M_GRAPHICSPIPELINE) != VK_SUCCESS)
     {
         vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
         throw std::runtime_error("Failed to create graphics pipeline!");
@@ -169,7 +169,7 @@ void BlackGlass::createGraphicsPipeline()
     pipelineInfo.pStages = skyStages;
     pipelineInfo.pVertexInputState = &emptyVertexInput;
 
-    if (vkCreateGraphicsPipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &M_SKYPIPELINE) != VK_SUCCESS)
+    if (vkCreateGraphicsPipelines(M_DEVICE, M_PIPELINECACHE, 1, &pipelineInfo, nullptr, &M_SKYPIPELINE) != VK_SUCCESS)
     {
         vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
         throw std::runtime_error("Failed to create sky pipeline!");
@@ -179,7 +179,7 @@ void BlackGlass::createGraphicsPipeline()
     pipelineInfo.pVertexInputState = &vertexInputInfo;
     depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
 
-    if (vkCreateGraphicsPipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &M_TRANSMISSIONPIPELINE) != VK_SUCCESS)
+    if (vkCreateGraphicsPipelines(M_DEVICE, M_PIPELINECACHE, 1, &pipelineInfo, nullptr, &M_TRANSMISSIONPIPELINE) != VK_SUCCESS)
     {
         vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
         throw std::runtime_error("Failed to create transmission pipeline!");
@@ -193,7 +193,7 @@ void BlackGlass::createGraphicsPipeline()
     colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
 
-    if (vkCreateGraphicsPipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &M_BLENDPIPELINE) != VK_SUCCESS)
+    if (vkCreateGraphicsPipelines(M_DEVICE, M_PIPELINECACHE, 1, &pipelineInfo, nullptr, &M_BLENDPIPELINE) != VK_SUCCESS)
     {
         vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
         throw std::runtime_error("Failed to create blend pipeline!");
@@ -221,7 +221,7 @@ void BlackGlass::createGraphicsPipeline()
     pipelineInfo.pStages = skinnedStages;
     pipelineInfo.pVertexInputState = &skinnedVertexInput;
 
-    if (vkCreateGraphicsPipelines(M_DEVICE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &M_VIEWMODELPIPELINE) != VK_SUCCESS)
+    if (vkCreateGraphicsPipelines(M_DEVICE, M_PIPELINECACHE, 1, &pipelineInfo, nullptr, &M_VIEWMODELPIPELINE) != VK_SUCCESS)
     {
         vkDestroyShaderModule(M_DEVICE, shaderModule, nullptr);
         throw std::runtime_error("Failed to create view model pipeline!");
